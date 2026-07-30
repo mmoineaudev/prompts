@@ -480,7 +480,7 @@ Also see: `references/init-order-traps.md`
 
 ## Registry Initialization From Existing World State
 
-Also see: `references/void-drift-launch-flow.md`
+Also see: `references/space-flight game-launch-flow.md`
 
 **Symptom**: New feature "does nothing".
 
