@@ -14,8 +14,8 @@ When asked to implement or verify a Three.js browser game in a Vite project:
 - Verify `index.html` must match Vite entry (`src/main.js`).
 
 ## 2 Browser setup
-- Prefer CDP-attached browser (Hermes browser connect) so you can reload, press keys, and read console without manual driver.
-- If CDP not available: open the page manually, use `browser_console` for JS evaluation.
+- Open the game in a browser with DevTools available for console inspection and JS evaluation.
+- Use the browser's console to inspect live state, trigger events, and verify DOM/canvas.
 
 ## 3 Verification sequence (real browser, not headless-only)
 1. Load page. Confirm canvas present on pause screen.

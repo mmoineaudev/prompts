@@ -3,8 +3,7 @@ name: threejs-debugging
 description: >
   Debugging patterns and pitfall avoidance for Three.js games and 3D web apps.
   Covers lazy-init, event bus audit, init ordering, restart safety, shader
-  attribute mismatches, Web AudioContext pitfalls, and headless CDP testing
-  when browser automation tools are unavailable.
+  attribute mismatches, Web AudioContext pitfalls, and browser-based verification.
 triggers:
   - "threejs crash"
   - "threejs error"
@@ -334,7 +333,7 @@ const cycle = distance % totalCycle;
 
 ---
 
-## Pitfall 16: Per-Frame Cooldown Gate Blocks Synchronous Operations
+## Pitfall 11: Per-Frame Cooldown Gate Blocks Synchronous Operations
 
 **Problem:** A synchronous loop tries to place N towers (or spawn N objects)
 by calling `place()` in a tight loop, but only the first call succeeds.
@@ -397,18 +396,18 @@ the cooldown gate must be removed or made per-frame rather than per-call.
 | `MaxListenersExceededWarning` | Event listeners not unsubscribed on restart | Store unsubscribe funcs, call on shutdown |
 | Shader silently fails | Missing geometry attributes | Verify all uniforms/attributes match |
 | `Cannot read properties of undefined (reading 'prototype')` | `THREE.WebGLInfo` removed in r160+ | Guard: `if (THREE.WebGLInfo && THREE.WebGLInfo.prototype) ...` |
-| Black screen, game initializes, no exceptions | DOM overlay on top of canvas | Check for fullscreen elements with solid background and high z-index (Pitfall 14) |
-| Camera jumps on frame 1, wrong view | Pan target hardcoded to (0,0) instead of camera position | Read `this.camera.position` when initializing pan/controls (Pitfall 15) |
-| Batch operation succeeds only once | Cooldown gate checked+set in method, decremented in loop | Remove cooldown check or make per-frame (Pitfall 16) |
-| Whole grid is invisible except path | Buildable tile color too close to `scene.background` | Use brighter buildable color, collapse hit-target mesh with display mesh (Pitfall 17) |
-| Spacebar / toggle crashes with stack overflow, no error message | Event emit triggers handler that calls back into emitting method | Add re-entry guard: `if (this._state === newValue) return;` before state change (Pitfall 20) |
-| All enemies spawn stacked on one tile in a single frame | `while` loop drains entire spawn queue instead of `if` per frame | Change `while (timer >= interval)` to `if (timer >= interval)`, reset timer to 0 after one spawn (Pitfall 21) |
-| Values diverge between constant file and hardcoded copies | Centralized constant tweaked but not all references updated | Grep for the hardcoded number; replace with constant reference; verify single source of truth (Pitfall 22) |
-| Enemies randomly skipped, appear invincible; no errors | `for...of` iterates live array while `_remove()` splices from it — iterator index desyncs | Use backwards `for (let i = arr.length-1; i >= 0; i--)` when removal during iteration is possible (Pitfall 23) |
-| One enemy killed spawns exponential clones that flood the map | Child entities inherit parent's ability tags including `split: true` | Override propagation-prone tags: `tags: { ...parentDef, split: false }` (Pitfall 24) |
+| Black screen, game initializes, no exceptions | DOM overlay on top of canvas | Check for fullscreen elements with solid background and high z-index |
+| Camera jumps on frame 1, wrong view | Pan target hardcoded to (0,0) instead of camera position | Read `this.camera.position` when initializing pan/controls |
+| Batch operation succeeds only once | Cooldown gate checked+set in method, decremented in loop | Remove cooldown check or make per-frame |
+| Whole grid is invisible except path | Buildable tile color too close to `scene.background` | Use brighter buildable color, collapse hit-target mesh with display mesh |
+| Spacebar / toggle crashes with stack overflow, no error message | Event emit triggers handler that calls back into emitting method | Add re-entry guard: `if (this._state === newValue) return;` before state change |
+| All enemies spawn stacked on one tile in a single frame | `while` loop drains entire spawn queue instead of `if` per frame | Change `while (timer >= interval)` to `if (timer >= interval)`, reset timer to 0 after one spawn |
+| Values diverge between constant file and hardcoded copies | Centralized constant tweaked but not all references updated | Grep for the hardcoded number; replace with constant reference; verify single source of truth |
+| Enemies randomly skipped, appear invincible; no errors | `for...of` iterates live array while `_remove()` splices from it — iterator index desyncs | Use backwards `for (let i = arr.length-1; i >= 0; i--)` when removal during iteration is possible |
+| One enemy killed spawns exponential clones that flood the map | Child entities inherit parent's ability tags including `split: true` | Override propagation-prone tags: `tags: { ...parentDef, split: false }` |
 ---
 
-## Pitfall 11: `THREE.WebGLInfo` Removed in Three.js r160+
+## Pitfall 12: `THREE.WebGLInfo` Removed in Three.js r160+
 
 **Problem:** Runtime crash — `Cannot read properties of undefined (reading 'prototype')` — triggered by accessing `THREE.WebGLInfo`.
 
@@ -433,7 +432,7 @@ if (THREE.WebGLInfo && THREE.WebGLInfo.prototype && THREE.WebGLInfo.prototype.re
 
 ---
 
-## Pitfall 18: Kill Reward Formula Ignores Wave Scaling Constant
+## Pitfall 13: Kill Reward Formula Ignores Wave Scaling Constant
 
 **Problem:** Mid-game waves become unkillable because kill rewards don't scale with wave number, so players can't afford to buy enough towers between waves.
 
@@ -465,7 +464,7 @@ If `killWaveScale` is defined but the formula doesn't use it, or the formula pro
 
 ---
 
-## Pitfall 19: Vite Build Succeeds Despite Import Errors
+## Pitfall 14: Vite Build Succeeds Despite Import Errors
 
 **Problem:** `npm run build` exits with code 0 even when there are import errors on undefined exports. The build produces a bundle that crashes at runtime.
 
@@ -492,7 +491,7 @@ echo "$BUILD_OUTPUT" | grep -qiE 'is not exported by|IMPORT_IS_UNDEFINED' && { e
 
 ---
 
-## Pitfall 13: Ground Tiles Invisible Against Scene Background
+## Pitfall 15: Ground Tiles Invisible Against Scene Background
 
 **Problem:** The three.js scene renders correctly (no exceptions, scene has children) but the player sees only a black void. Path tiles with additive blending are visible, but buildable tiles blend into the dark background.
 
@@ -521,7 +520,7 @@ const buildColor = new THREE.Color(0x253050);  // visible dark blue against 0x05
 
 ---
 
-## Pitfall 14: DOM Overlay Covers Entire Canvas
+## Pitfall 16: DOM Overlay Covers Entire Canvas
 
 **Problem:** Game renders correctly but user sees a black screen with only UI elements visible. The canvas is hidden behind a full-screen overlay element.
 
@@ -550,7 +549,7 @@ import './game-diagnostic.js';  // creates <pre> with background:#05060d;z-index
 
 ---
 
-## Pitfall 15: Camera Position Mismatch in Input System
+## Pitfall 17: Camera Position Mismatch in Input System
 
 **Problem:** Camera starts at correct position but immediately jumps to wrong angle on frame 1.
 
@@ -583,7 +582,7 @@ this._pan = {
 
 ---
 
-## Pitfall 13: Headless CDP Testing When Browser Tools Are Unavailable
+## Pitfall 18: Headless CDP Testing When Browser Tools Are Unavailable
 
 **Problem:** You need to test a Three.js/Vite game at runtime — verify the
 game loop fires, towers/projectiles/enemies interact, UI clicks work — but
@@ -668,7 +667,7 @@ Vite/ESM web app, not just Three.js games.
 
 ---
 
-## Pitfall 14: DOM Overlays Obscuring the Canvas (Black Screen)
+## Pitfall 19: DOM Overlays Obscuring the Canvas (Black Screen)
 
 **Problem:** Game loads and initializes (console shows "GAME_INIT", scene has
 children) but the user sees a completely black screen. The canvas renders
@@ -707,7 +706,7 @@ the Three.js pipeline.
 
 ---
 
-## Pitfall 15: Camera Position Desync Between Init and Update Systems
+## Pitfall 20: Camera Position Desync Between Init and Update Systems
 
 **Problem:** The camera is positioned correctly during scene setup (e.g. at
 `(-4, 22, 28)` looking at the grid center), but an input/update system
@@ -742,7 +741,7 @@ rather than hardcoding coordinates.
 
 ---
 
-## Pitfall 17: Ground Tiles Invisible Against Scene Background
+## Pitfall 21: Ground Tiles Invisible Against Scene Background
 
 **Problem:** The three.js scene renders but the player reports seeing "only
 a black void plus the path." Buildable tiles where the player should place
@@ -842,7 +841,7 @@ expose the underlying (still-invisible) tiles, then apply Pitfall 17.
 
 ---
 
-## Pitfall 20: Event Bus Self-Triggered Infinite Recursion
+## Pitfall 22: Event Bus Self-Triggered Infinite Recursion
 
 **Problem:** Pressing spacebar to toggle pause crashes with a stack overflow —
 no visible error in console, no exception message, just a hard crash. The
@@ -911,7 +910,7 @@ target state is the simplest fix.
 
 ---
 
-## Pitfall 21: Timer-Based Queue Consumed in One Frame (while vs if)
+## Pitfall 23: Timer-Based Queue Consumed in One Frame (while vs if)
 
 **Problem:** A wave/spawn manager uses a `while` loop to consume a timer:
 when `dt` is large or the spawn interval is short, the loop drains the
@@ -964,7 +963,7 @@ frames.
 
 ---
 
-## Pitfall 22: Centralized Constants Diverging from Hardcoded Values
+## Pitfall 24: Centralized Constants Diverging from Hardcoded Values
 
 **Problem:** A centralized constants file defines `BUDGET.sellBackRatio = 0.7`,
 but two call sites (`TowerManager.sell()` and `GameplaySystem._handleRightClick()`)
@@ -1032,7 +1031,7 @@ the import is used everywhere.
 
 ---
 
-## Pitfall 23: `for...of` Array Mutation During Iteration
+## Pitfall 25: `for...of` Array Mutation During Iteration
 
 **Problem:** Enemies are randomly skipped in the update loop, appearing
 invincible or frozen. No errors in the console. The symptom is
@@ -1095,7 +1094,7 @@ you're certain the array won't be modified during iteration.
 
 ---
 
-## Pitfall 24: Enemy Child Propagation — Abilities Inherited by Clones
+## Pitfall 26: Enemy Child Propagation — Abilities Inherited by Clones
 
 **Problem:** One enemy is killed and spawns children, but the children inherit
 the parent's ability tags via `{ ...def }` spread — including `split: true`.
@@ -1150,7 +1149,7 @@ children.
 
 ---
 
-## Pitfall 25: Exponential Fog Extinguishes Distant Background Objects
+## Pitfall 27: Exponential Fog Extinguishes Distant Background Objects
 
 **Problem:** A starfield or distant background is completely invisible even though the points/geometry exist in the scene and the camera far-plane is large enough. The scene looks empty and black. No errors in console.
 
