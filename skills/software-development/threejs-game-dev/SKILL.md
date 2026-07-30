@@ -1409,7 +1409,7 @@ This preserves gameplay variety without adding generic entity spam.
 
 ## 59. Session Tuning Reference
 
-Stable performance/visual tuning targets for this project are captured in `references/void-drift-performance-tune-2026-07-22.md`. Use it when reducing scene load, rebalancing biomes, or choosing dense-vs-sparse zone parameters.
+Stable performance/visual tuning targets for this project are captured in `references/space-flight game-performance-tune-2026-07-22.md`. Use it when reducing scene load, rebalancing biomes, or choosing dense-vs-sparse zone parameters.
 
 When a menu should preview gameplay objects, give each card its own mini Three.js render tree instead of 2D swatches:
 
