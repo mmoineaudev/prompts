@@ -212,16 +212,18 @@ parse_args() {
 }
 ```
 
+# Replace 'mycli' with your actual CLI name:
+
 ## Testing Checklist
 
 After implementing argument parsing, verify:
 
-- [ ] `aug --dry-run explain 'ls -la'` → clean user prompt (no aug flags)
-- [ ] `aug --model brain analyze 'test'` → server override works
-- [ ] `aug --prompt review file.py 'security'` → positional vars resolve
-- [ ] `aug --prompt review --code=file.py --focus=perf` → named args resolve
-- [ ] `aug prompt list` → subcommand dispatch works
-- [ ] `aug` (no command) → helpful error message
+- [ ] `mycli --dry-run explain 'ls -la'` → clean user prompt (no CLI flags)
+- [ ] `mycli --model brain analyze 'test'` → server override works
+- [ ] `mycli --prompt review file.py 'security'` → positional vars resolve
+- [ ] `mycli --prompt review --code=file.py --focus=perf` → named args resolve
+- [ ] `mycli prompt list` → subcommand dispatch works
+- [ ] `mycli` (no command) → helpful error message
 
 ## Common Bash Gotchas Recap
 

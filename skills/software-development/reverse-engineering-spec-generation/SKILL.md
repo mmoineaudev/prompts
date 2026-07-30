@@ -33,7 +33,7 @@ Do NOT load for:
 ## Session Workflow
 
 ### Phase A — Surface the code first
-1. Enumerate the repo root and target source tree. Prefer `search_files(target='files', pattern='<target glob>')` over shell globs.
+1. List the repo root and target source tree. Use file globbing or directory listing tools.
 2. Read entrypoints and build scripts first to establish boundaries: `README`, `package.json`, `index.html`, launcher/docs.
 3. Inventory a complete file list before reading anything in depth. Confirm count matches expectations.
 

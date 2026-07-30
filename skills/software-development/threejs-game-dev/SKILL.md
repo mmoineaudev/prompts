@@ -384,34 +384,6 @@ Key details:
 - Increase strength `t` from `0→1` over about 2 seconds so the self-level feels like decay, not a hard snap.
 - Only level **pitch** and **roll**; do **not** snap yaw back toward a fixed heading, or circular flight becomes impossible.
 
-### 4.2 Idle Self-Level After 3 Seconds
-
-When the player stops steering, let the ship drift visually back toward level flight instead of holding the last extreme attitude. Gate this behind an idle timer so it does not fight active input:
-
-```js
-updateRotation(dt, input) {
-  // ... existing steering ...
-
-  const inputStrength = Math.abs(input.mouseX) + Math.abs(input.mouseY);
-  if (inputStrength < 0.001) {
-    this._idleTime += dt;
-  } else {
-    this._idleTime = 0;
-  }
-
-  if (this._idleTime > 3) {
-    const t = Math.min((this._idleTime - 3) * 0.5, 1);
-    this.mesh.rotation.x += (0 - this.mesh.rotation.x) * 2 * dt * t;
-    this.mesh.rotation.z += (0 - this.mesh.rotation.z) * 2 * dt * t;
-  }
-}
-```
-
-Key details:
-- Reset on any mouse movement, not just large moves.
-- Increase strength `t` from `0→1` over about 2 seconds so the self-level feels like decay, not a hard snap.
-- Only level **pitch** and **roll**; do **not** snap yaw back toward a fixed heading, or circular flight becomes impossible.
-
 ### 4.3 AZERTY-aware keyboard flight (optional, secondary)
 
 Use only if the project explicitly requires combined mouse + keyboard flight. Bind by `event.code`, not `event.key`.

@@ -81,11 +81,11 @@ Every use case file uses this exact structure:
 
 ## Execution — Agent Workflow
 
-Follow these steps in order. Use Hermes tools (`read_file`, `search_files`, `write_file`) at each stage.
+Follow these steps in order. Use file reading and search tools as needed at each stage.
 
 ### Phase 1: Scope and Goals (Steps 1-5)
 
-**Step 1 — Name scope and boundaries.** Analyze input (source code via `read_file`/`search_files`, or text docs). Determine what is inside vs outside the system. Document In/Out in `README.md`.
+**Step 1 — Name scope and boundaries.** Analyze input (source code, text docs). Determine what is inside vs outside the system. Document In/Out in `README.md`.
 
 **Step 2 — Brainstorm primary actors.** Identify every human AND non-human actor that initiates interactions. Include future automated triggers.
 
@@ -116,7 +116,7 @@ Follow these steps in order. Use Hermes tools (`read_file`, `search_files`, `wri
 ### Output Generation
 
 After completing the recipe:
-1. Create folder structure with `mkdir -p` or implicit via `write_file`.
+1. Create the folder structure (`use_cases/0_summary`, `1_user_goals`, `2_subfunctions`).
 2. Write `README.md` using the template at `references/README_template.md`.
 3. Write each use case file following the exact template above.
 4. Generate `checklist.md` if requested (see below).
@@ -191,7 +191,7 @@ When generating a checklist:
 
 Format for AI agent consumption — clear hierarchy, no ambiguous language, specific technical requirements.
 
-See `checklist-extraction-from-specs` for the extraction workflow and `checklist-driven-implementation-workflow` for execution patterns.
+For the extraction workflow, see companion methodology on converting specs to checklists. For execution patterns, see companion methodology on checklist-driven implementation.
 
 ## Common Pitfalls (Quick Reference)
 

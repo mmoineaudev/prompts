@@ -104,7 +104,7 @@ Boot/Load -> Gameplay <-> Pause Menu (if requested)
                       -> Game Over -> Gameplay (restart)
 ```
 
-**No title screen by default.** Games boot directly into gameplay. The Play.fun widget handles score display, leaderboards, and wallet connect in a deadzone at the top of the game, so no in-game score HUD is needed. Only add a title/menu scene if the user explicitly requests one.
+**No title screen by default.** Games boot directly into gameplay. Only add a title/menu scene if the user explicitly requests one.
 
 ## Common Architecture Pitfalls
 

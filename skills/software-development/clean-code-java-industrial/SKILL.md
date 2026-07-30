@@ -431,4 +431,4 @@ Use this checklist:
 
 ---
 
-*Reference: Clean Code (Ch. 1–14, 17) by Robert C. Martin. Full methodology source at ~/Models/CUR/final_uncle_bob.md*
+*Reference: Clean Code (Ch. 1–14, 17) by Robert C. Martin.*

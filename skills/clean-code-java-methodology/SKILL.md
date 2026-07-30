@@ -8,12 +8,6 @@ category: software-development
 
 Comprehensive reference for implementing clean Java code based on Robert C. Martin's "Clean Code".
 
-## Reference Document
-
-Full methodology guide: `~/Models/CUR/CleanCode_explained_merged.java.md` (~163KB, 20 chapters)
-
-Read sections as needed during implementation. Use the Table of Contents for quick navigation.
-
 ## When to Apply
 
 - Implementing new Java features or modules
@@ -141,13 +135,3 @@ Before committing Java code, verify:
 - [ ] Dependencies flow one direction (DIP)
 - [ ] Third-party libs wrapped in thin abstraction layers
 - [ ] Modern Java features used where appropriate
-
-## Loading the Full Reference
-
-When you need detailed guidance on a specific topic, read the relevant chapter:
-
-```bash
-grep -n "^## Chapter" ~/Models/CUR/CleanCode_explained_merged.java.md
-```
-
-Then read the section starting from that line number.

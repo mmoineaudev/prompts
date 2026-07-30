@@ -22,14 +22,14 @@ Merge two markdown files into a single coherent document, preserving content fro
 Extract structure from both files to understand their organization:
 
 ```python
-from hermes_tools import terminal, read_file
+import subprocess
 
 # Get chapter/section headers from both files
-result_a = terminal("grep -n '^## ' path/to/file_a.md")
-result_b = terminal("grep -n '^## ' path/to/file_b.md")
+result_a = subprocess.run(["grep", "-n", "^## ", "path/to/file_a.md"], capture_output=True, text=True)
+result_b = subprocess.run(["grep", "-n", "^## ", "path/to/file_b.md"], capture_output=True, text=True)
 
 # Count lines and characters for size comparison
-stats = terminal("wc -l file_a.md file_b.md && wc -c file_a.md file_b.md")
+stats = subprocess.run(["wc", "-l", "file_a.md", "file_b.md"], capture_output=True, text=True)
 ```
 
 ### Step 2: Read Both Files into Memory
@@ -67,22 +67,22 @@ Compare section headers from both files to identify:
 
 ### Step 5: Merge Strategy
 
-For matching sections, prefer the more detailed version and selectively integrate unique content from the other. Use a Python script with `write_file` to build the merged output:
+For matching sections, prefer the more detailed version and selectively integrate unique content from the other. Build the merged output in memory before writing:
 
 ```python
 # Pseudocode for merge logic
 merged = [header]
 for chapter in original_chapters:
     merged.append(chapter)
-    carnice_match = find_matching_section(carnice_sections, chapter)
-    if carnice_match:
-        unique_content = extract_unique_blocks(carnice_match, chapter)
+    secondary_match = find_matching_section(secondary_sections, chapter)
+    if secondary_match:
+        unique_content = extract_unique_blocks(secondary_match, chapter)
         merged.append(unique_content)
     else:
         # No match in original - check if complementary
         pass
 
-for section in carnice_sections:
+for section in secondary_sections:
     if not has_matching_section(original_chapters, section):
         merged.append(section)
 ```
@@ -92,13 +92,14 @@ for section in carnice_sections:
 Write the merged file, then validate structure:
 
 ```python
-from hermes_tools import write_file, terminal
+import subprocess
 
-write_file("merged_output.md", "\n".join(merged))
+with open("merged_output.md", "w") as f:
+    f.write("\n".join(merged))
 
 # Verify chapter structure
-result = terminal("grep -n '^## ' merged_output.md")
-print(result["output"])
+result = subprocess.run(["grep", "-n", "^## ", "merged_output.md"], capture_output=True, text=True)
+print(result.stdout)
 ```
 
 ### Step 7: Fix Artifacts

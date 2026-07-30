@@ -401,16 +401,9 @@ the cooldown gate must be removed or made per-frame rather than per-call.
 | Whole grid is invisible except path | Buildable tile color too close to `scene.background` | Use brighter buildable color, collapse hit-target mesh with display mesh (Pitfall 17) |
 | Spacebar / toggle crashes with stack overflow, no error message | Event emit triggers handler that calls back into emitting method | Add re-entry guard: `if (this._state === newValue) return;` before state change (Pitfall 20) |
 | All enemies spawn stacked on one tile in a single frame | `while` loop drains entire spawn queue instead of `if` per frame | Change `while (timer >= interval)` to `if (timer >= interval)`, reset timer to 0 after one spawn (Pitfall 21) |
-| Values diverge between constant file and hardcoded copies | Centralized constant tweaked but not all references updated | Grep for the hardcoded number; replace with `BUDGET.constantName`; verify single source of truth (Pitfall 22) |
+| Values diverge between constant file and hardcoded copies | Centralized constant tweaked but not all references updated | Grep for the hardcoded number; replace with constant reference; verify single source of truth (Pitfall 22) |
 | Enemies randomly skipped, appear invincible; no errors | `for...of` iterates live array while `_remove()` splices from it — iterator index desyncs | Use backwards `for (let i = arr.length-1; i >= 0; i--)` when removal during iteration is possible (Pitfall 23) |
-| Health bars / damage numbers needed over 3D entities | Canvas sprites are blurry and expensive; DOM overlays are crisper and cheaper | See `references/visual-fx-health-bars.md` — project 3D positions to screen with `Vector3.project(camera)`, position `<div>` elements |
-| Starfield background invisible or looks unnatural for top-down view | Fog too dense, `sizeAttenuation` shrinks points, or rotation feels artificial | See `references/starfield-background-pattern.md` — use flat drifting plane, `sizeAttenuation: false`, very low fog density, drift not rotate |
-| One enemy killed spawns exponential clones that flood the map | Child entities inherit parent's ability tags (`tags: { ...parentDef }`) including `split: true` | Override propagation-prone tags: `tags: { ...parentDef, split: false }` (Pitfall 24) |
-| TD balance: game trivially easy past wave N, or impossible past wave N | killWaveScale and hpWaveScale misaligned; gold income outpaces enemy HP pool | See `references/td-balance-tuning.md` for systematic tuning of kill gold, HP scaling, wave count, and gold divisor |
-| Tower mechanics: how to implement pierce, aura slow, corrode, stun | Each mechanic requires a different pattern in _towerFire and CollisionSystem | See `references/td-mechanics-patterns.md` for implementation patterns |
-| Entities look flat against dark background; need sci-fi edge glow | Standard emissive materials look uniform; fresnel rim creates crisp edge highlight | See `references/fresnel-rim-shader.md` for custom ShaderMaterial with hit flash |
-| Health bars / damage numbers needed over 3D entities | Canvas sprites are blurry and expensive; DOM overlays are crisper and cheaper | See `references/visual-fx-health-bars.md` — project 3D positions to screen with `Vector3.project(camera)`, position `<div>` elements |
-| Starfield background invisible or looks unnatural for top-down view | Fog too dense, `sizeAttenuation` shrinks points, or rotation feels artificial | See `references/starfield-background-pattern.md` — use flat drifting plane, `sizeAttenuation: false`, very low fog density, drift not rotate |
+| One enemy killed spawns exponential clones that flood the map | Child entities inherit parent's ability tags including `split: true` | Override propagation-prone tags: `tags: { ...parentDef, split: false }` (Pitfall 24) |
 ---
 
 ## Pitfall 11: `THREE.WebGLInfo` Removed in Three.js r160+
@@ -442,9 +435,9 @@ if (THREE.WebGLInfo && THREE.WebGLInfo.prototype && THREE.WebGLInfo.prototype.re
 
 **Problem:** Mid-game waves become unkillable because kill rewards don't scale with wave number, so players can't afford to buy enough towers between waves.
 
-**Root cause:** The reward formula uses `Math.max(1, state.wave) * enemy.reward` instead of properly multiplying by a wave-scaling constant. In this session the fix changed it to `enemy.reward * (1 + (state.wave - 1) * BUDGET.killWaveScale)` with `killWaveScale = 1.5`.
+**Root cause:** The reward formula uses a flat multiplier instead of scaling with wave number. A common fix is `enemy.reward * (1 + (state.wave - 1) * killWaveScale)` with `killWaveScale` around 1.5.
 
-A `killWaveScale` constant may exist in `BUDGET` / constants files but go unused because the formula was written before the constant was introduced, or the formula uses `state.wave` directly without the scaling factor. When waves scale linearly but rewards stay flat, by wave 10 the player can't afford to place enough towers to kill what spawns.
+A `killWaveScale` constant may exist in the constants file but go unused because the formula was written before the constant was introduced, or the formula uses `state.wave` directly without the scaling factor. When waves scale linearly but rewards stay flat, by wave 10 the player can't afford to place enough towers to kill what spawns.
 
 **Check the constants AND the implementation together:**
 ```bash
@@ -454,7 +447,7 @@ grep -n "reward =" src/systems/EnemyManager.js
 
 If `killWaveScale` is defined but the formula doesn't use it, or the formula produces rewards smaller than what the wave composition demands, the game is unwinnable past a certain wave.
 
-**Sanity check for TD wave balance** (see `references/td-balance-audit.md`):
+**Sanity check for TD wave balance:**
 1. Calculate enemies per wave at wave N: `mobsBase + mobsGrow * N`
 2. Calculate total HP budget for wave N
 3. Calculate total tower DPS budget affordable from cumulative rewards
@@ -462,16 +455,15 @@ If `killWaveScale` is defined but the formula doesn't use it, or the formula pro
 
 **Fix:**
 - Lower `mobsBase` and `mobsGrow` so wave count grows gently
-- Ensure kill-reward formula uses a wave-scaling constant (`killWaveScale`)
-- Increase `startMoney` so the first wave is buildable
-- Slash boss HP when they appear — `Mothership` at 660 HP with speed 0.8 is impossible for wave-level towers; 400 HP is beatable
+- Ensure kill-reward formula uses a wave-scaling constant
+- Increase start money so the first wave is buildable
+- Reduce boss HP when they appear — bosses with extreme HP pools at early waves are mathematically impossible
 
-**When to apply:** Any wave-based TD player reports "wave X is impossible." Always audit the reward formula and wave scaling constants together.
+**When to apply:** Any wave-based game where players report "wave X is impossible." Always audit the reward formula and wave scaling constants together.
 
 ---
 
 ## Pitfall 19: Vite Build Succeeds Despite Import Errors
-
 
 **Problem:** `npm run build` exits with code 0 even when there are import errors on undefined exports. The build produces a bundle that crashes at runtime.
 
