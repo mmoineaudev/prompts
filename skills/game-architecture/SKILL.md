@@ -125,7 +125,7 @@ Before considering a game complete, verify all items:
 - [ ] **Constants** — Zero hardcoded magic numbers in game logic
 - [ ] **EventBus** — No direct cross-module imports for communication
 - [ ] **Cleanup** — All listeners removed in shutdown, resources disposed
-- [ ] **Mute toggle** — See `mute-button` rule
+- [ ] **Mute toggle** — Audio can be toggled on/off via a key or UI button
 - [ ] **Delta-based** — All movement uses delta time, not frame count
 - [ ] **Build** — `npm run build` succeeds with no errors
 - [ ] **No errors** — No uncaught exceptions or console errors at runtime

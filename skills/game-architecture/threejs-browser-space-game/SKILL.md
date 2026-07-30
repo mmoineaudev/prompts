@@ -1,20 +1,21 @@
 ---
 name: threejs-browser-space-game
 description: |
-  Class-level workflow for building, debugging, and evolving Three.js browser space/exploration games.
+  Workflow for building, debugging, and evolving Three.js browser space/exploration games.
   Covers runtime error triage, biome-variety patterns, preset-specific ship geometry, and safe
-  multiplayer-style callback wiring in a browser Vite/ESM codebase.
+  callback wiring in a browser Vite/ESM codebase.
+version: 1.0.0
+author: Hermes Agent
+license: MIT
+tags: [threejs, space-game, vite, browser-game, biome, debugging]
 triggers:
-  - "three.js space game"
+  - "Three.js space game"
   - "browser space game"
   - "space exploration game"
   - "biome variety"
   - "runtime error threejs"
   - "fatal tick error"
   - "ship preset geometry"
-od:
-  mode: prototype
-  category: game-architecture
 ---
 
 # threejs-browser-space-game

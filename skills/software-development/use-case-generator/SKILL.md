@@ -4,11 +4,7 @@ description: Use when generating Cockburn-style fully-dressed use cases from sou
 version: 2.0.0
 author: Hermes Agent
 license: MIT
-platforms: [linux, macos, windows]
-metadata:
-  hermes:
-    tags: [requirements, use-cases, Cockburn, analysis, documentation, specification]
-    related_skills: [writing-plans, checklist-extraction-from-specs, checklist-driven-implementation-workflow]
+tags: [requirements, use-cases, Cockburn, analysis, documentation, specification]
 ---
 
 # Use Case Generator — Cockburn's Fully Dressed Methodology

@@ -23,6 +23,8 @@ version: 1.1.0
 
 ## Overview
 
+> **Which debugging skill to use?** This skill (`threejs-debugging`) covers general Three.js runtime failures — crashes, null refs, WebGL errors, build issues. For gameplay-specific silent failures (events not firing, HUD stuck, systems not triggering), use the companion `threejs-game-debugging` skill instead.
+
 Three.js projects have a unique set of runtime failure modes that differ from
 standard web apps. This skill captures the most common and destructive patterns
 discovered through debugging production Three.js games.

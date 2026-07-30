@@ -26,8 +26,8 @@ Building production-quality 3D games in the browser with Three.js + Vite.
 This skill covers 3D space/ship/flying games. For **2D-in-3D platformers and
 metroidvanias** (room-based worlds, AABB collision on a 2D gameplay plane,
 orthographic camera, player state machines, ability gating, boss phases),
-load `threejs-2d-platformer` instead — it has the genre-specific patterns
-this skill does not cover.
+use a dedicated platformer skill — the genre-specific patterns
+(room transitions, door systems, ability gating) are not covered here.
 
 ---
 

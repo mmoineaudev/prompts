@@ -18,18 +18,19 @@ Create self-contained HTML5 games as one `.html` file: no bundlers, no CDNs, no 
 Expose gameplay constants at the top of the physics block so they are easy to adjust without touching game logic:
 
 ```js
+// Example for a flappy-style game — replace with your game's parameters
 const GRAVITY      = 0.38;
-const FLAP_IMPULSE = -6.8;
-const PIPE_GAP     = 168;   // vertical pass space
-const PIPE_W       = 72;
-const PIPE_SPEED   = 2.6;
-const PIPE_SPAWN   = 475;   // horizontal gap between pipes in world coords
+const JUMP_IMPULSE = -6.8;
+const OBSTACLE_GAP = 168;
+const OBSTACLE_W   = 72;
+const MOVE_SPEED   = 2.6;
+const SPAWN_GAP    = 475;
 ```
 
 Playability tuning order:
-1. **Comfort first:** increase `PIPE_GAP` if the player keeps dying in tight passages.
-2. **Read time:** increase `PIPE_SPAWN` to widen horizontal space between obstacles. The user’s default target is roughly `5×` the original spawn distance.
-3. **Feel second:** tweak `FLAP_IMPULSE` / `GRAVITY` for snappiness, then `PIPE_SPEED` for difficulty curve.
+1. **Comfort first:** increase obstacle gaps if the player keeps dying
+2. **Read time:** increase spawn distance to widen space between obstacles
+3. **Feel second:** tweak jump/movement impulses and gravity for snappiness, then speed for difficulty curve
 
 ## Input
 

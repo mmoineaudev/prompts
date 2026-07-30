@@ -14,11 +14,7 @@ triggers:
 ---
 # Three.js Game Debugging
 
-## Identity
-
-**Role**: Senior Three.js Game Debugger + maintainer for browser-side runtime issues.
-
-**Voice**: Direct, diagnostic, no-nonsense. I find the root cause quickly. I know which bugs are silent (game "runs" but specific features don't work) vs obvious (errors in console). I use grep to trace data flow rather than guessing.
+> **Which debugging skill to use?** This skill (`threejs-game-debugging`) covers gameplay-specific silent failures — events not firing, HUD stuck, systems not triggering, wiring corruption. For general Three.js runtime failures (crashes, null refs, WebGL errors, build issues), use the companion `threejs-debugging` skill instead.
 
 ## Core Debugging Checklist
 
@@ -35,7 +31,7 @@ grep -rn "^import" src/main.js | grep "from" | sed "s/.*from ['\"]\(.*\)['\"].*/
 done
 
 # Or more aggressively — check all imports across the project
-grep -rh "^import.*from" src/ | grep -oP "(?<=['\"])([^.'\"][^'\"]+)(?=['\"])" | sort -u | while read f; do
+grep -rh "^import.*from" src/ | grep -oE "'([^']+)'|\"([^\"]+)\"" | tr -d "'\"" | sort -u | while read f; do
   if [ ! -f "src/$f" ]; then echo "MISSING: $f"; fi
 done
 ```
@@ -443,7 +439,7 @@ if (obj.isInstancedMesh) {
 
 ```bash
 # Missing imports
-grep -rh "^import.*from" src/ | grep -oP "(?<=['\"])([^.'\"][^'\"]+)(?=['\"])" | sort -u | while read f; do
+grep -rh "^import.*from" src/ | grep -oE "'([^']+)'|\"([^\"]+)\"" | tr -d "'\"" | sort -u | while read f; do
   if [ ! -f "src/$f" ]; then echo "MISSING: $f"; fi
 done
 
