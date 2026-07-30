@@ -91,7 +91,7 @@ When generating an implementation plan tied to the reverse-engineered spec:
 
 ## Support Files
 
-- `references/void-drift-edge-cases.md` — concrete findings from a Three.js space-flight game reverse engineering session: README/code mismatches, stale-index bug, instanced-collision gap, dead `BuffSystem`, duplicate HTML variants, and subsystem inventory table.
+- `references/space-flight game-edge-cases.md` — concrete findings from a Three.js space-flight game reverse engineering session: README/code mismatches, stale-index bug, instanced-collision gap, dead `BuffSystem`, duplicate HTML variants, and subsystem inventory table.
 
 ## Quality Signals
 
