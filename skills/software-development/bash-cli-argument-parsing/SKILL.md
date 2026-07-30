@@ -22,7 +22,7 @@ case "$1" in
         ...
         ;;
     --prompt)   # NEVER REACHED
-        PROMPT_NAME="$2"
+        SUBCMD_ARG="$2"
         shift 2
         ;;
 esac
@@ -30,8 +30,8 @@ esac
 # CORRECT: specific patterns first, wildcards last
 case "$1" in
     --dry-run) DRY_RUN=1; shift ;;
-    --model)   OVER_MODEL="$2"; shift 2 ;;
-    --prompt)  PROMPT_NAME="$2"; shift 2 ;;
+    --model)   MODEL_VALUE="$2"; shift 2 ;;
+    --prompt)  SUBCMD_ARG="$2"; shift 2 ;;
     --*)       # wildcard LAST — catches unknown flags
         ...
         ;;
@@ -62,9 +62,9 @@ parse_args() {
     while (( $# > 0 )); do
         case "$1" in
             --dry-run) DRY_RUN=1; shift ;;   # only consumes the flag
-            --model) OVER_MODEL="$2"; shift 2 ;;  # consumes flag + value
-            -*) warn "Unknown flag: $1"; exit 1 ;;
-            *) COMMAND_TYPE="$1"; shift ;;    # consumes positional arg
+            --model) MODEL_VALUE="$2"; shift 2 ;;  # consumes flag + value
+            -*) echo "Error: Unknown flag: $1" >&2; exit 1 ;;
+            *) COMMAND="$1"; shift ;;    # consumes positional arg
         esac
     done
 }
@@ -130,7 +130,7 @@ Perl regex (`grep -oP`) is unreliable in bash scripts, especially on systems wit
 vars=$(grep -oP '\{[a-z_]+\}' "$file" | tr -d '{}')
 
 # CORRECT: use bash regex matching
-combined="$PT_SYSTEM $PT_USER"
+combined="$config_section $user_section"
 tmp="$combined"
 found_vars=()
 while [[ "$tmp" =~ \{([a-zA-Z_][a-zA-Z0-9_]*)\} ]]; do
@@ -155,9 +155,9 @@ parse_template() {
         [[ -z "$line" ]] && continue
         
         # Detect section start (new key=value)
-        if [[ "$line" =~ ^system_prompt[[:space:]]*=[[:space:]]*(.+) ]]; then
+        if [[ "$line" =~ ^config_key[[:space:]]*=[[:space:]]*(.+) ]]; then
             # Flush previous accumulated content
-            [[ -n "$accumulated" ]] && PT_SYSTEM="$accumulated"
+            [[ -n "$accumulated" ]] && config_section="$accumulated"
             accumulated="${BASH_REMATCH[1]}"  # start accumulating
             section="system"
             continue
@@ -170,7 +170,7 @@ parse_template() {
     done < "$file"
     
     # Flush remaining content
-    [[ "$section" == "system" && -n "$accumulated" ]] && PT_SYSTEM="$accumulated"
+    [[ "$section" == "system" && -n "$accumulated" ]] && config_section="$accumulated"
 }
 ```
 
@@ -183,8 +183,8 @@ parse_args() {
     while (( $# > 0 )); do
         case "$1" in
             --dry-run)   DRY_RUN=1; shift ;;
-            --model)     OVER_MODEL="$2"; shift 2 ;;
-            --prompt)    PROMPT_NAME="$2"; shift 2 || break
+            --model)     MODEL_VALUE="$2"; shift 2 ;;
+            --prompt)    SUBCMD_ARG="$2"; shift 2 || break
                          # collect remaining as positional
                          while (( $# > 0 )); do
                              POSITIONAL_ARGS+=("$1"); shift
@@ -195,17 +195,17 @@ parse_args() {
                              POSITIONAL_ARGS+=("$1")
                              shift; continue
                          fi
-                         warn "Unknown flag: $1"; exit 1 ;;
-            start)       cmd_start; exit 0 ;;
-            stop)        cmd_stop; exit 0 ;;
+                         echo "Error: Unknown flag: $1" >&2; exit 1 ;;
+            start)       handle_start; exit 0 ;;
+            stop)        handle_stop; exit 0 ;;
             prompt)      # subcommand
                          local subcmd="${2:-}"
                          case "$subcmd" in
-                             create) cmd_create "${3:-}"; exit 0 ;;
-                             list)   print_list; exit 0 ;;
+                             create) handle_create "${3:-}"; exit 0 ;;
+                             list)   handle_list; exit 0 ;;
                          esac ;;
-            -*)          warn "Unknown flag: $1"; exit 1 ;;
-            *)           [[ -z "$COMMAND_TYPE" ]] && COMMAND_TYPE="$1" || POSITIONAL_ARGS+=("$1")
+            -*)          echo "Error: Unknown flag: $1" >&2; exit 1 ;;
+            *)           [[ -z "$COMMAND" ]] && COMMAND="$1" || POSITIONAL_ARGS+=("$1")
                          shift ;;
         esac
     done
