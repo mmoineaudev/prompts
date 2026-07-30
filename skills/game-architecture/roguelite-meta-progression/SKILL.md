@@ -12,7 +12,7 @@ trigger:
 
 # Roguelite Meta-Progression Architecture
 
-Pattern for games where the player has persistent progression across runs — permadeath runs with permanent upgrades that survive death. Suitable for dungeon crawlers, space haulers, mining descent games, and any roguelite loop.
+Pattern for games where the player has persistent progression across runs — permadeath runs with permanent upgrades that survive death. Suitable for dungeon crawlers, space haulers, mining game games, and any roguelite loop.
 
 ## Core Concept — Two State Scopes
 
