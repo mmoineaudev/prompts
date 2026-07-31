@@ -187,6 +187,10 @@ export const Constants = {
     COLLISION_DAMAGE_LARGE: 20,
     COLLISION_DAMAGE_SMALL: 5,
     WARNING_HEALTH_THRESHOLD: 30,     // red vignette + warning beep below this
+    DAMAGE_INVULNERABILITY: 0.75,     // seconds without damage after a hit
+    ASTEROID_HP: { large: 100, medium: 50, small: 25 },  // 4 / 2 / 1 laser shots
+    ASTEROID_DRIFT_MIN: 1,            // u/s base drift
+    ASTEROID_DRIFT_MAX: 4,
 
     // Comets
     COMET_MIN_SCALE: 3,
@@ -197,8 +201,11 @@ export const Constants = {
     COMET_DAMAGE: 25,             // ship collision damage
     COMET_SCORE: 100,
     COMET_TUMBLE_SPEED: 0.3,      // rad/s
-    COMET_TRAIL_POOL: 400,        // dust trail particles
-    COMET_SMOKE_POOL: 200,        // smoke trail sprites
+    COMET_TRAIL_POOL: 800,        // global dust trail pool (shared across comets)
+    COMET_SMOKE_POOL: 300,        // global smoke trail sprite pool (shared)
+    COMET_CURVE_AMPLITUDE: 10,    // u, sinusoidal path deviation
+    COMET_CURVE_WAVELENGTH: 150,  // u, sine wavelength
+    COMET_MIN_DIST_FROM_SHIP: 150,// u, spawn fairness guard
     COMET_TRAIL_LIFETIME: 4.0,    // seconds
     COMET_SMOKE_LIFETIME: 6.0,    // seconds
 
@@ -208,6 +215,8 @@ export const Constants = {
     BLACK_HOLE_GRAVITY_STRENGTH: 2500,// acceleration = strength / distance² (capped at 120)
     BLACK_HOLE_SHIP_PULL_FACTOR: 0.5, // ship feels half the pull (escapable hazard)
     BLACK_HOLE_DISK_SPEED: 0.5,       // accretion disk rotation (rad/s)
+    BLACK_HOLE_MAX_PULL: 120,         // u/s² gravity cap
+    BLACK_HOLE_WARNING_RANGE: 40,     // u from the horizon surface
     BLACK_HOLE_MIN_DISTANCE: 3000,    // only spawns from Nebula Corridor onward
 
     // Dead stars (stellar remnants)
@@ -219,6 +228,7 @@ export const Constants = {
     DEAD_STAR_LIGHT_COLOR: 0xff3322,
     DEAD_STAR_WARNING_RANGE: 60,      // from surface
     DEAD_STAR_MIN_SPACING: 1500,      // units between dead stars
+    DEAD_STAR_MIN_DIST_FROM_SHIP: 400, // u, spawn fairness guard (they are huge)
     DEAD_STAR_EMBER_POOL: 100,        // surface ember particles
 
     // Screen shake
@@ -266,12 +276,16 @@ export const Constants = {
         exhaust:     { maxParticles: 200, lifetime: 0.8,  size: 0.3 },
         laserSpark:  { maxParticles: 50,  lifetime: 0.3,  size: 0.15 },
         explosion:   { maxParticles: 80,  lifetime: 1.2,  size: 0.4 },
+        cometDust:   { maxParticles: 800, lifetime: 4.0,  size: 0.8 },  // shared across comets
+        cometSmoke:  { maxParticles: 300, lifetime: 6.0,  size: 2.0 },
+        ember:       { maxParticles: 100, lifetime: 2.0,  size: 0.3 },  // dead star surface
     },
 
     // Scoring
     SCORE_ASTEROID_BASE: 10,           // × size tier (small=1, medium=2, large=3)
     SCORE_DEBRIS: 1,
     SCORE_DISTANCE_DIVISOR: 10,        // 1 point per 10 units traveled
+    DEBRIS_DENSITY_FACTOR: 0.4,        // debrisCount = round(asteroidDensity × this)
 
     // Performance targets
     MAX_DRAW_CALLS: 50,
@@ -297,10 +311,11 @@ export const Constants = {
 | Bright stars | 30 | 3.0-5.0 | — | White, bloom pass | Light sources, visual anchors |
 
 **Implementation:** `THREE.Points` with custom `ShaderMaterial` (vertex + fragment). Single `BufferGeometry` with attributes for size, color, alpha per layer. Near-layer twinkle via perlin noise on alpha in fragment shader.
+Star materials render with `fog: false` so exponential fog never swallows the background.
 
 ### 5.2 Nebula Clouds (Volumetric Feel)
 
-Billboarded sprite clusters (8-12 overlapping billboards per cluster) with custom GLSL fragment shader using 3D simplex noise. 3-5 clusters per chunk. Biome-dependent color palettes. Animated via `uTime` uniform (slow drift + pulse). See §10 for GLSL reference.
+Billboarded sprite clusters (8-12 overlapping billboards per cluster) with custom GLSL fragment shader using 3D simplex noise. `nebulaCount` clusters per chunk (2/3/6/8 by biome, see §5.8). Biome-dependent color palettes. Animated via `uTime` uniform (slow drift + pulse). See §10 for GLSL reference.
 
 ### 5.3 Dynamic Lighting
 
@@ -311,6 +326,7 @@ Billboarded sprite clusters (8-12 overlapping billboards per cluster) with custo
 | Nebula cores | PointLight[] (≤4/chunk) | 0.8-1.5 | Local illumination, color accents |
 | Ship headlight | SpotLight (cone ahead) | 1.0, range 30 | Illuminates path, reveals debris |
 | Ship accent | PointLight (below ship) | 0.4, blue/purple | Rim glow, cinematic feel |
+| Dead stars | PointLight (at core) | 3.0, range 600, red | Landmark glow, tints nearby objects |
 
 Materials: `MeshStandardMaterial` with roughness 0.8-1.0, metalness 0.1-0.3.
 
@@ -334,6 +350,9 @@ Low-end device detection: `navigator.hardwareConcurrency < 4` → skip chromatic
 | Laser impact spark | Burst particles, fade out | 50 | 0.3s | 0.15 |
 | Destruction explosion | Expanding sphere, color fade yellow→red→black | 80 | 1.2s | 0.4 |
 | Debris fragments | Small InstancedMesh shards with simple physics | 100 | 2.0s | 0.1-0.5 |
+| Comet dust trail | Points, emitted behind nucleus | 800 (shared) | 4.0s | 0.5-1.2 |
+| Comet smoke trail | Soft dark-grey sprites, slowly expanding | 300 (shared) | 6.0s | 1.5-2.5 |
+| Dead star embers | Faint rising sparks | 100 | 2.0s | 0.3 |
 
 Object pooling: pre-allocate, reset to origin on reuse. Update via `BufferAttribute` each frame (no allocations in the loop).
 
@@ -399,7 +418,7 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 
 - **Body**: huge sphere, radius 25-45 u, `MeshStandardMaterial` deep red-black (color 0x1a0505, emissive 0x4a0d0d) with pulsing emissive intensity (0.4-1.2, simplex noise — a dying ember).
 - **Surface detail**: canvas-generated emissive map with patchy hot cracks (dark reds on near-black) so the sphere reads as cooling crust, not a flat ball.
-- **Glow sprite**: billboard 6× sphere radius, dark-red radial gradient, additive — visible from afar even in fog.
+- **Glow sprite**: billboard 6× sphere radius, dark-red radial gradient, additive, `fog: false` — visible from afar even in fog.
 - **Light**: red PointLight (intensity 3, range 600, decay 2) — radiates light across several chunks, tinting nearby asteroids and nebulae.
 - **Ember particles**: faint rising sparks (pool 100, lifetime 2 s) drifting off the surface.
 
@@ -414,6 +433,7 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 - **Max speed**: Capped at `MAX_SHIP_SPEED` (80 units/s).
 - **Strafing**: Q/D for lateral movement along the ship's local X axis at same acceleration/drag.
 - **Forward direction**: fully player-controlled heading; camera trails behind the heading (CAMERA_DISTANCE / CAMERA_HEIGHT in ship-local space, damped).
+- **Camera roll**: the camera does NOT inherit ship roll — it eases back toward world-up, preventing disorientation during rolls.
 
 ### 6.2 Weapon System
 
@@ -422,6 +442,7 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 - Speed: 200 units/s. Lifetime: 3s OR range 200 units (whichever first).
 - Destructible targets: asteroids, rocks, debris, comets. Non-destructible: large space stations, wormhole walls, black holes (projectiles are swallowed by the event horizon with no effect), dead stars (lasers spark harmlessly on the surface).
 - Impact feedback: spark particles (10-20, 0.3s fade) + screen flash + explosion sound.
+- Asteroid HP: large 100 / medium 50 / small 25 → 4 / 2 / 1 shots at 25 dmg.
 
 ### 6.3 Procedural World Generation
 
@@ -449,6 +470,13 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 - Comet count × (1 + distance/5000)
 - Black hole pull × (1 + distance/8000), capped at 2×
 
+**World rules:**
+- Biome distance = cumulative odometer (monotonic — never regresses on backward flight).
+- Content spawns in a Y band of ±60 u around the ship's Y (chunk grid tracks X/Z only).
+- Asteroid base drift: 1-4 u/s in a random direction + slow tumble; speed scales ×(1 + distance/6000).
+- Debris count per chunk: `round(asteroidDensity × DEBRIS_DENSITY_FACTOR)`, seeded.
+- Fairness guards: comets spawn ≥ 150 u from the ship; dead stars ≥ 400 u (they are huge).
+
 ### 6.4 Score System
 
 - Asteroid destroyed: 10 × size tier (small=1, medium=2, large=3)
@@ -462,6 +490,9 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 - Health: 100 points.
 - Collision with asteroid > 2 units: -20 + screen shake + red flash
 - Collision with asteroid ≤ 2 units or debris: -5
+- Collision with comet: -25
+- After any hit: `DAMAGE_INVULNERABILITY` (0.75 s) — no damage during the window
+- Black hole horizon or dead star surface contact: instant death (bypasses invulnerability)
 - Health < 30: red vignette pulse overlay, warning beep
 - Health = 0: death dissolve → game over screen → Press R to restart
 - No health regeneration during gameplay
@@ -472,7 +503,7 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 - Leave two persistent trails: dust particle trail (4 s fade) and smoke sprite trail (6 s fade, slowly expanding).
 - Destructible: 150 HP (6 laser shots), ship collision damage 25, score 100. On destruction: large explosion + score + shake (bigger than an asteroid).
 - Trajectory is bent by black hole gravity — a comet can be pulled off course and consumed.
-- Spawn per chunk at `cometDensity` (3/6/8/10 per biome), seeded. Comets do not collide with asteroids (pass through).
+- Spawn per chunk at `cometDensity` (3/6/8/10 per biome), seeded, ≥ 150 u from the ship. Comets do not collide with asteroids (pass through).
 
 ### 6.7 Black Holes
 
@@ -482,10 +513,11 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 - **Consumption**: any object (asteroid, comet, debris, projectile, ship) crossing `BLACK_HOLE_RADIUS` (8 u) disappears with a brief accretion flash. No explosion debris, no score.
 - Ship consumed → instant death, death screen title "CONSUMED BY A BLACK HOLE".
 - Black holes cannot be damaged or destroyed. Wormhole biome can contain both a tunnel and a black hole.
+- **Warning**: pulsing red "⚠ EVENT HORIZON" HUD text within `BLACK_HOLE_WARNING_RANGE` (40 u) of the horizon surface.
 
 ### 6.8 Dead Stars
 
-- Rare stellar remnants: **dark red, radiating light**, enormous (25-45 u radius). Spawn via `deadStarDensity` % chance per chunk — 1% Open Space, 2% Asteroid Belt, 3% Nebula Corridor, 4% Wormhole. Max one per chunk, minimum 1500 u spacing between dead stars.
+- Rare stellar remnants: **dark red, radiating light**, enormous (25-45 u radius). Spawn via `deadStarDensity` % chance per chunk — 1% Open Space, 2% Asteroid Belt, 3% Nebula Corridor, 4% Wormhole. Max one per chunk, minimum 1500 u spacing between dead stars, ≥ 400 u from the ship.
 - **Landmark only**: no gravity, no destruction, no score. Comets and asteroids pass by unaffected.
 - **Collision**: touching the surface = instant death (PLAYER_DIED reason `dead_star`), death screen "VAPORIZED BY A DEAD STAR".
 - **Warning**: pulsing red "⚠ STELLAR REMNANT" HUD text within 60 u of the surface.
@@ -505,13 +537,13 @@ All UI is HTML/CSS DOM overlay on top of canvas (not 3D objects).
 | Crosshair | Center | Subtle reticle: thin circle (radius 12px) + 4 dots (NSEW), white at 50% opacity |
 | Biome indicator | Top-right | Current biome name, fades in/out on transition |
 | Speed indicator | Bottom-left | Small bar showing thrust fraction |
-| Event horizon warning | Center-bottom | Pulsing red "⚠ EVENT HORIZON" text when ship is within 40 u of a black hole |
+| Event horizon warning | Center-bottom | Pulsing red "⚠ EVENT HORIZON" text when ship is within 40 u of the horizon surface |
 | Stellar remnant warning | Center-bottom | Pulsing red "⚠ STELLAR REMNANT" text when ship is within 60 u of a dead star's surface |
 
 ### Death Screen
 
-Appears when health reaches 0 after 1s delay. Shows:
-- "SHIP DESTROYED" title
+Appears when health reaches 0 after 1s delay (or instantly on black hole / dead star contact). Shows:
+- Title by cause: "SHIP DESTROYED" (collision/health), "CONSUMED BY A BLACK HOLE", "VAPORIZED BY A DEAD STAR"
 - Final score
 - Distance traveled
 - High score (with "NEW!" if beaten)
@@ -531,6 +563,8 @@ All audio is procedurally synthesized via Web Audio API oscillators and noise. *
 | Collision hit | Damage event | Low thud: sine 100Hz, 0.3s decay, slight distortion |
 | Warning beep | Health < 30 | 800Hz sine, 3 pulses (50ms on, 150ms off), repeating every 2s |
 | Biome transition | Zone change | Rising arpeggio: 3 sine tones (200, 300, 500Hz), 0.3s each |
+| Black hole consumption | Object crosses horizon | Descending sweep 300→60Hz (0.4s) + low sub thump |
+| Comet destruction | Comet destroyed | Deep rumble + crackle burst (noise, low-pass 400Hz, 0.6s) |
 
 **Spatial audio**: explosion sounds panned based on direction from ship (optional).
 
@@ -652,7 +686,7 @@ export const Events = {
     PLAYER_THRUST:      'player:thrust',          // { thrustFraction }
     PLAYER_THRUST_END:  'player:thrustEnd',
     PLAYER_DAMAGED:     'player:damaged',         // { amount, source, newHealth }
-    PLAYER_DIED:        'player:died',            // { reason }
+    PLAYER_DIED:        'player:died',            // { reason: 'collision' | 'black_hole' | 'dead_star' }
     PLAYER_HEALTH_CHANGED: 'player:healthChanged', // { health, maxHealth }
 
     // Weapon
@@ -837,15 +871,14 @@ npm run preview   # Preview production build
 - [ ] P12.9 Visual "wow" factor: dense, layered, atmospheric
 
 ### Phase 13 — Comets & Black Holes
-- [ ] P13.1 Free flight confirmed: yaw/pitch via mouse, camera trails heading
-- [ ] P13.2 Comets visible: 3-6 u nuclei with dust + smoke trails, moving 15-30 u/s
-- [ ] P13.3 Comets destructible: 150 HP, 100 score, collision damage 25
-- [ ] P13.4 Black holes spawn in Nebula Corridor+, accretion disk + photon ring visible
-- [ ] P13.5 Gravity: asteroids/comets/debris accelerate toward hole — stronger when closer
-- [ ] P13.6 Objects consumed at event horizon: disappear with flash, no debris
-- [ ] P13.7 Ship pulled (weakly) near a hole; touching horizon = death "CONSUMED BY A BLACK HOLE"
-- [ ] P13.8 Projectiles swallowed by horizon; hole indestructible
-- [ ] P13.9 Event horizon warning shows within 40 u
+- [ ] P13.1 Comets visible: 3-6 u nuclei with dust + smoke trails, moving 15-30 u/s
+- [ ] P13.2 Comets destructible: 150 HP, 100 score, collision damage 25
+- [ ] P13.3 Black holes spawn in Nebula Corridor+, accretion disk + photon ring visible
+- [ ] P13.4 Gravity: asteroids/comets/debris accelerate toward hole — stronger when closer
+- [ ] P13.5 Objects consumed at event horizon: disappear with flash, no debris
+- [ ] P13.6 Ship pulled (weakly) near a hole; touching horizon = death "CONSUMED BY A BLACK HOLE"
+- [ ] P13.7 Projectiles swallowed by horizon; hole indestructible
+- [ ] P13.8 Event horizon warning shows within 40 u of horizon
 
 ### Phase 14 — Dead Stars
 - [ ] P14.1 Dead stars visible: huge dark-red spheres radiating red light, glow visible from afar
