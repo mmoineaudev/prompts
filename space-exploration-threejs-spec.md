@@ -74,15 +74,17 @@ All input uses **event.code** for AZERTY/QWERTY compatibility:
 | Roll left | A | A | Smooth interpolated roll rotation |
 | Roll right | E | E | Smooth interpolated roll rotation |
 | Fire weapon | Space or Left Click | Space or Left Click | Single laser burst, rate-limited |
+| Pitch up / down | Mouse up / down | Mouse up / down | Y-axis look, smooth interpolation |
+| Yaw left / right | Mouse left / right | Mouse left / right | X-axis look, smooth interpolation |
 | Pause | Escape | Escape | |
 | Mute audio | M | M | Toggle all sound |
 | Restart (on death) | R | R | |
 
 **Arrow keys** also work as aliases: Up=Z, Down=S, Left=Q, Right=D.
 
-**Touch/mobile**: virtual joystick overlay (left half = movement, right half = aim). Tap to fire. Swipe to roll.
+**Touch/mobile**: virtual joystick overlay (left half = movement, right half = look: drag to pitch/yaw). Tap to fire. Two-finger swipe to roll.
 
-**Mouse**: X-axis movement controls roll (smooth interpolation, `SHIP_ROLL_SPEED` sensitivity). Left click to fire.
+**Mouse**: X-axis movement = yaw, Y-axis movement = pitch (smooth interpolation, `MOUSE_LOOK_SPEED`). A/E keys handle roll. Left click to fire. Click the canvas to capture the pointer (pointer lock); Esc releases and pauses.
 
 Game boots directly into gameplay — no title screen. Press R on death screen to restart.
 
@@ -118,8 +120,10 @@ space-exploration/
 │   │   ├── ChunkManager.js               # Chunk/segment spawn (ahead) & cleanup (behind)
 │   │   ├── Starfield.js                  # Multi-layer parallax particle starfield (3 layers)
 │   │   ├── NebulaSystem.js               # Volumetric-feel nebula clouds (billboard + custom shader)
-│   │   ├── AsteroidField.js              # Procedural asteroid generation (InstancedMesh)
-│   │   ├── DebrisSystem.js               # Floating debris, destructible objects
+│   │   ├── AsteroidField.js           # Procedural asteroid generation (InstancedMesh)
+│   │   ├── CometSystem.js             # Comets: spawn, trajectory, dust + smoke trails
+│   │   ├── BlackHoleSystem.js         # Black holes: gravity well, accretion disk, consumption
+│   │   ├── DebrisSystem.js            # Floating debris, destructible objects
 │   │   └── BiomeGenerator.js             # Biome variant selection per distance zone
 │   ├── ui/
 │   │   ├── HUD.js                        # DOM overlay: score, distance, health bar
@@ -159,6 +163,7 @@ export const Constants = {
     SHIP_ACCELERATION: 40,        // units/s²
     SHIP_DRAG: 0.98,              // per-frame multiplier (velocity *= drag when thrust released)
     SHIP_ROLL_SPEED: 3.0,         // rad/s
+    MOUSE_LOOK_SPEED: 0.0025,     // rad per pixel, yaw & pitch (free flight)
     SHIP_SPAWN: { x: 0, y: 2, z: 0 },
 
     // Camera
@@ -182,6 +187,28 @@ export const Constants = {
     COLLISION_DAMAGE_SMALL: 5,
     WARNING_HEALTH_THRESHOLD: 30,     // red vignette + warning beep below this
 
+    // Comets
+    COMET_MIN_SCALE: 3,
+    COMET_MAX_SCALE: 6,
+    COMET_SPEED_MIN: 15,          // units/s (moderate speed)
+    COMET_SPEED_MAX: 30,
+    COMET_HP: 150,                // 6 laser shots
+    COMET_DAMAGE: 25,             // ship collision damage
+    COMET_SCORE: 100,
+    COMET_TUMBLE_SPEED: 0.3,      // rad/s
+    COMET_TRAIL_POOL: 400,        // dust trail particles
+    COMET_SMOKE_POOL: 200,        // smoke trail sprites
+    COMET_TRAIL_LIFETIME: 4.0,    // seconds
+    COMET_SMOKE_LIFETIME: 6.0,    // seconds
+
+    // Black holes
+    BLACK_HOLE_RADIUS: 8,             // event horizon — anything closer is consumed
+    BLACK_HOLE_GRAVITY_RADIUS: 150,   // influence radius (units)
+    BLACK_HOLE_GRAVITY_STRENGTH: 2500,// acceleration = strength / distance² (capped at 120)
+    BLACK_HOLE_SHIP_PULL_FACTOR: 0.5, // ship feels half the pull (escapable hazard)
+    BLACK_HOLE_DISK_SPEED: 0.5,       // accretion disk rotation (rad/s)
+    BLACK_HOLE_MIN_DISTANCE: 3000,    // only spawns from Nebula Corridor onward
+
     // Screen shake
     SHAKE_DAMAGE_INTENSITY: 0.5,      // units of random offset
     SHAKE_DAMAGE_DURATION: 0.3,       // seconds
@@ -193,14 +220,14 @@ export const Constants = {
     CHUNK_SIZE: 200,                  // units per chunk (square)
     CHUNKS_AHEAD: 3,                  // chunks spawned ahead of ship
     CHUNKS_BEHIND: 2,                 // chunks retained behind ship
-    SHIP_FORWARD_AXIS: 'z',           // ship flies in -Z direction
+    SHIP_FORWARD_AXIS: 'z',           // ship's forward axis is local -Z (heading is free)
 
     // Biomes (distance in units traveled)
     BIOMES: {
-        OPEN_SPACE:       { range: [0, 1000],   asteroidDensity: 10,  nebulaCount: 2,  color: [0.1, 0.15, 0.3] },
-        ASTEROID_BELT:    { range: [1000, 3000], asteroidDensity: 40,  nebulaCount: 3,  color: [0.4, 0.2, 0.1] },
-        NEBULA_CORRIDOR:  { range: [3000, 5000], asteroidDensity: 20,  nebulaCount: 6,  color: [0.3, 0.15, 0.4] },
-        WORMHOLE:         { range: [5000, 7000], asteroidDensity: 60,  nebulaCount: 8,  color: [0.2, 0.1, 0.5] },
+        OPEN_SPACE:       { range: [0, 1000],   asteroidDensity: 10,  nebulaCount: 2,  cometDensity: 3,  blackHoleDensity: 0,  color: [0.1, 0.15, 0.3] },
+        ASTEROID_BELT:    { range: [1000, 3000], asteroidDensity: 40,  nebulaCount: 3,  cometDensity: 6,  blackHoleDensity: 0,  color: [0.4, 0.2, 0.1] },
+        NEBULA_CORRIDOR:  { range: [3000, 5000], asteroidDensity: 20,  nebulaCount: 6,  cometDensity: 8,  blackHoleDensity: 4,  color: [0.3, 0.15, 0.4] },
+        WORMHOLE:         { range: [5000, 7000], asteroidDensity: 60,  nebulaCount: 8,  cometDensity: 10, blackHoleDensity: 8,  color: [0.2, 0.1, 0.5] },
     },
     POST_7000_MULTIPLIER: 1.5,        // intensity multiplier for repeated biome cycles
 
@@ -320,13 +347,13 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 
 ### 5.8 Biome-Specific Visuals
 
-| Biome | Distance | Asteroid density | Nebula count | Colors | Visual signature |
-|-------|----------|-----------------|--------------|--------|-----------------|
-| Open space | 0-1000 | 10/chunk | 2 | Blue-black | Sparse stars, 1-2 small nebulae |
-| Asteroid belt | 1000-3000 | 40/chunk | 3 | Orange/red | Dense rocks, warm nebula, debris |
-| Nebula corridor | 3000-5000 | 20/chunk | 6 | Multi-hue | Tight passage of billowing clouds |
-| Wormhole | 5000-7000 | 60/chunk | 8 | Purple/blue/cyan | Curved tunnel, particle vortex, intense bloom |
-| 7000+ repeat | — | ×1.5 all | ×1.5 all | All | Biome cycle repeats with increased intensity |
+| Biome | Distance | Asteroid density | Nebula count | Comets | Black holes | Colors | Visual signature |
+|-------|----------|-----------------|--------------|--------|-------------|--------|-----------------|
+| Open space | 0-1000 | 10/chunk | 2 | 3/chunk | 0 | Blue-black | Sparse stars, 1-2 small nebulae |
+| Asteroid belt | 1000-3000 | 40/chunk | 3 | 6/chunk | 0 | Orange/red | Dense rocks, warm nebula, debris, comet streaks |
+| Nebula corridor | 3000-5000 | 20/chunk | 6 | 8/chunk | 4%/chunk | Multi-hue | Billowing clouds, comet trails, first black holes |
+| Wormhole | 5000-7000 | 60/chunk | 8 | 10/chunk | 8%/chunk | Purple/blue/cyan | Curved tunnel, vortex, black hole accretion glow |
+| 7000+ repeat | — | ×1.5 all | ×1.5 all | ×1.5 | ×1.5 | All | Biome cycle repeats with increased intensity |
 
 ### 5.9 Speed & Motion Effects
 
@@ -339,24 +366,41 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 
 `scene.fog = new THREE.FogExp2(0x000011, 0.008)` — exponential fog. Distant objects fade naturally. Nebula density increases slightly with fog for seamless blending.
 
+### 5.11 Comet Visuals
+
+- **Nucleus**: IcosahedronGeometry + simplex displacement, 3-6 u, ice-blue/rocky PBR (roughness 0.9, metalness 0.1, faint bluish emissive tint), slow tumble (`COMET_TUMBLE_SPEED`).
+- **Coma**: soft billboard sprite ~2.5× nucleus radius, pale cyan, additive blending, subtle pulse.
+- **Dust tail**: particle stream emitted behind the nucleus (yellowish-white, additive), pool 400, lifetime 4 s, sized 0.5-1.2 u.
+- **Ion tail**: thin elongated stretched sprite aligned with the velocity vector, electric blue, additive, low opacity.
+- **Smoke trail**: 200 soft dark-grey sprites, lifetime 6 s, semi-transparent, slowly expanding — the "smoke" behind the comet.
+- Trails bend slightly when the comet is inside a black hole's gravity well (trajectory curves toward the hole).
+
+### 5.12 Black Hole Visuals
+
+- **Event horizon**: sphere, radius 8 u, pure black (`MeshBasicMaterial` 0x000000, renders black regardless of light).
+- **Photon ring**: thin torus at ~1.5× horizon radius, emissive orange-white, bloom glow.
+- **Accretion disk**: RingGeometry (inner ~1.2×, outer ~3× horizon radius) with custom ShaderMaterial — radial falloff, Doppler beaming (approaching side visibly brighter), palette white→yellow→orange, rotating via uTime (`BLACK_HOLE_DISK_SPEED`).
+- **Consumption flash**: when any object crosses the horizon, a quick radial flash + brief disk flare (0.2 s) — the object is gone, no explosion debris.
+- Distant objects near the hole appear subtly lensed (cheap approximation: slight vertex bulge on the disk shader only; full screen-space lensing is a stretch goal).
+
 ---
 
 ## 6. Gameplay Systems
 
 ### 6.1 Player Ship
 
-- **Movement**: Inertia-based. Thrust (Z key held) → acceleration at `SHIP_ACCELERATION`. Release → velocity decays at `SHIP_DRAG` multiplier per frame.
+- **Free flight**: the ship has a free 3D heading (yaw + pitch). Mouse X = yaw, mouse Y = pitch at `MOUSE_LOOK_SPEED`; heading rotates smoothly and the camera reorients behind it with damping. A/E keys roll (visual + slight turn assist — no lift physics).
+- **Movement**: Inertia-based. Thrust (Z key held) → acceleration at `SHIP_ACCELERATION` **along the ship's local -Z axis**. Release → velocity decays at `SHIP_DRAG` multiplier per frame.
 - **Max speed**: Capped at `MAX_SHIP_SPEED` (80 units/s).
-- **Strafing**: Q/D for lateral movement at same acceleration/drag.
-- **Roll**: A/E keys or mouse X → smooth roll interpolation at `SHIP_ROLL_SPEED`.
-- **Forward direction**: Ship flies in -Z direction (into screen). Camera trails behind.
+- **Strafing**: Q/D for lateral movement along the ship's local X axis at same acceleration/drag.
+- **Forward direction**: fully player-controlled heading; camera trails behind the heading (CAMERA_DISTANCE / CAMERA_HEIGHT in ship-local space, damped).
 
 ### 6.2 Weapon System
 
 - Fire: Space or left click → single laser burst. Rate-limited to `FIRE_RATE` (8 shots/s).
 - Projectile: visible glowing beam (thin CylinderGeometry, emissive + bloom), travels forward relative to ship heading.
 - Speed: 200 units/s. Lifetime: 3s OR range 200 units (whichever first).
-- Destructible targets: asteroids, rocks, debris. Non-destructible: large space stations, wormhole walls.
+- Destructible targets: asteroids, rocks, debris, comets. Non-destructible: large space stations, wormhole walls, black holes (projectiles are swallowed by the event horizon with no effect).
 - Impact feedback: spark particles (10-20, 0.3s fade) + screen flash + explosion sound.
 
 ### 6.3 Procedural World Generation
@@ -372,6 +416,8 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 3. Asteroid field (density per biome × seeded randomization)
 4. Debris objects (density per biome × seeded randomization)
 5. Biome decorations (wormhole tunnel geometry for WORMHOLE biome)
+6. Comets (`cometDensity` per biome × seeded randomization)
+7. Black holes (`blackHoleDensity` % chance per chunk, NEBULA_CORRIDOR onward only)
 
 **Wormhole tunnel**: `TubeGeometry` along a curved CatmullRom path through the chunk. Walls use custom ShaderMaterial with swirling UV distortion. Particle vortex (200+ particles) spiraling through center. Ship must navigate through opening.
 
@@ -379,11 +425,14 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 - Asteroid count × (1 + distance/5000)
 - Nebula density × (1 + distance/8000)
 - Asteroid speed × (1 + distance/6000)
+- Comet count × (1 + distance/5000)
+- Black hole pull × (1 + distance/8000), capped at 2×
 
 ### 6.4 Score System
 
 - Asteroid destroyed: 10 × size tier (small=1, medium=2, large=3)
 - Debris destroyed: 1
+- Comet destroyed: 100
 - Distance: 1 per 10 units traveled
 - High score persisted in `localStorage` key `void_drift_highscore`
 
@@ -395,6 +444,23 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 - Health < 30: red vignette pulse overlay, warning beep
 - Health = 0: death dissolve → game over screen → Press R to restart
 - No health regeneration during gameplay
+
+### 6.6 Comets
+
+- Big icy/rocky bodies, 3-6 u, flying at a moderate 15-30 u/s in a mostly straight line with a slight sinusoidal curve.
+- Leave two persistent trails: dust particle trail (4 s fade) and smoke sprite trail (6 s fade, slowly expanding).
+- Destructible: 150 HP (6 laser shots), ship collision damage 25, score 100. On destruction: large explosion + score + shake (bigger than an asteroid).
+- Trajectory is bent by black hole gravity — a comet can be pulled off course and consumed.
+- Spawn per chunk at `cometDensity` (3/6/8/10 per biome), seeded. Comets do not collide with asteroids (pass through).
+
+### 6.7 Black Holes
+
+- Rare gravitational anomalies; spawn from Nebula Corridor onward (`blackHoleDensity` 4% / 8% chance per chunk, never in Open Space or Asteroid Belt).
+- **Gravity well**: every asteroid, comet, and debris object within `BLACK_HOLE_GRAVITY_RADIUS` (150 u) accelerates toward the center with `a = BLACK_HOLE_GRAVITY_STRENGTH / d²` (capped at 120 u/s²). **The closer, the stronger the pull.**
+- **Ship**: feels the same pull × `BLACK_HOLE_SHIP_PULL_FACTOR` (0.5) — a real hazard that must be thrust against, but escapable at the edge of the well.
+- **Consumption**: any object (asteroid, comet, debris, projectile, ship) crossing `BLACK_HOLE_RADIUS` (8 u) disappears with a brief accretion flash. No explosion debris, no score.
+- Ship consumed → instant death, death screen title "CONSUMED BY A BLACK HOLE".
+- Black holes cannot be damaged or destroyed. Wormhole biome can contain both a tunnel and a black hole.
 
 ---
 
@@ -410,6 +476,7 @@ All UI is HTML/CSS DOM overlay on top of canvas (not 3D objects).
 | Crosshair | Center | Subtle reticle: thin circle (radius 12px) + 4 dots (NSEW), white at 50% opacity |
 | Biome indicator | Top-right | Current biome name, fades in/out on transition |
 | Speed indicator | Bottom-left | Small bar showing thrust fraction |
+| Event horizon warning | Center-bottom | Pulsing red "⚠ EVENT HORIZON" text when ship is within 40 u of a black hole |
 
 ### Death Screen
 
@@ -566,6 +633,9 @@ export const Events = {
     // Environment
     ASTEROID_DESTROYED: 'environment:asteroidDestroyed', // { position, size, score }
     DEBRIS_DESTROYED:   'environment:debrisDestroyed',
+    COMET_DESTROYED:    'environment:cometDestroyed',    // { position, score }
+    OBJECT_CONSUMED:    'environment:objectConsumed',    // { objectType, position } — asteroid/comet/debris eaten by a black hole
+    BLACK_HOLE_SPAWNED: 'environment:blackHoleSpawned',  // { position, radius }
     CHUNK_SPAWNED:      'environment:chunkSpawned',     // { chunkX, chunkZ }
     CHUNK_CLEANED:      'environment:chunkCleaned',
     BIOME_CHANGED:      'environment:biomeChanged',     // { from, to }
@@ -616,6 +686,9 @@ npm run preview   # Preview production build
 | No audio files | All audio is procedural Web Audio synthesis. No .ogg/.mp3 |
 | No external textures | Star texture generated via canvas. Ships/asteroids are procedural geometry |
 | Post-processing passes not in three/addons | Vignette, film grain, chromatic aberration are custom ShaderPass implementations |
+| Gravity loop cost | Cap gravity iterations per frame (e.g. 32 bodies/frame), use squared distances, skip bodies beyond GRAVITY_RADIUS |
+| Camera disorientation in free flight | Keep camera lerp smooth (CAMERA_DAMPING), never snap; roll is visual only |
+| Comet trail overdraw | Trails are additive/dark sprites with short lifetimes — pooling keeps draw calls flat |
 
 ---
 
@@ -629,6 +702,7 @@ npm run preview   # Preview production build
 6. Speed run leaderboard — distance-based records
 7. Photo mode — pause + free camera + screenshot
 8. Shader-based wormhole vortex — full-screen tunnel distortion post-process
+9. Full-screen gravitational lensing — screen-space distortion around black holes
 
 ---
 
@@ -653,8 +727,10 @@ npm run preview   # Preview production build
 - [ ] P3.2 ZQSD movement: translation in correct directions
 - [ ] P3.3 Inertia physics: smooth acceleration, no instant-turn
 - [ ] P3.4 Max speed cap enforced (80 units/s)
-- [ ] P3.5 A/E roll + mouse X roll: smooth interpolation
+- [ ] P3.5 A/E roll keys: smooth interpolated roll
 - [ ] P3.6 Camera follows ship with damping, cinematic offset
+- [ ] P3.7 Free flight: mouse yaw/pitch rotates heading, thrust follows local -Z
+- [ ] P3.8 Camera reorients behind ship heading with damping, no snapping
 
 ### Phase 4 — Starfield
 - [ ] P4.1 Three-layer parallax starfield visible
@@ -727,6 +803,17 @@ npm run preview   # Preview production build
 - [ ] P12.7 Zero console errors
 - [ ] P12.8 `npm run build` succeeds
 - [ ] P12.9 Visual "wow" factor: dense, layered, atmospheric
+
+### Phase 13 — Comets & Black Holes
+- [ ] P13.1 Free flight confirmed: yaw/pitch via mouse, camera trails heading
+- [ ] P13.2 Comets visible: 3-6 u nuclei with dust + smoke trails, moving 15-30 u/s
+- [ ] P13.3 Comets destructible: 150 HP, 100 score, collision damage 25
+- [ ] P13.4 Black holes spawn in Nebula Corridor+, accretion disk + photon ring visible
+- [ ] P13.5 Gravity: asteroids/comets/debris accelerate toward hole — stronger when closer
+- [ ] P13.6 Objects consumed at event horizon: disappear with flash, no debris
+- [ ] P13.7 Ship pulled (weakly) near a hole; touching horizon = death "CONSUMED BY A BLACK HOLE"
+- [ ] P13.8 Projectiles swallowed by horizon; hole indestructible
+- [ ] P13.9 Event horizon warning shows within 40 u
 
 ---
 
