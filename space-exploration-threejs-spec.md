@@ -231,6 +231,17 @@ export const Constants = {
     DEAD_STAR_MIN_DIST_FROM_SHIP: 400, // u, spawn fairness guard (they are huge)
     DEAD_STAR_EMBER_POOL: 100,        // surface ember particles
 
+    // Wormhole tunnel
+    WORMHOLE_TUNNEL_RADIUS: 40,       // inner opening radius (u)
+    WORMHOLE_WALL_THICKNESS: 25,      // wall shell depth (u)
+    WORMHOLE_BLUR_MAX_INTENSITY: 0.85,// blur strength at full penetration
+    WORMHOLE_BLUR_FADE: 0.5,          // s, blur fade-out after exiting a wall
+
+    // Space stations (decorative)
+    STATION_MIN_SCALE: 12,            // hull length u
+    STATION_MAX_SCALE: 20,
+    STATION_MIN_DIST_FROM_SHIP: 300,  // u, spawn fairness guard
+
     // Screen shake
     SHAKE_DAMAGE_INTENSITY: 0.5,      // units of random offset
     SHAKE_DAMAGE_DURATION: 0.3,       // seconds
@@ -246,10 +257,10 @@ export const Constants = {
 
     // Biomes (distance in units traveled)
     BIOMES: {
-        OPEN_SPACE:       { range: [0, 1000],   asteroidDensity: 10,  nebulaCount: 2,  cometDensity: 3,  blackHoleDensity: 0,  deadStarDensity: 1,  color: [0.1, 0.15, 0.3] },
-        ASTEROID_BELT:    { range: [1000, 3000], asteroidDensity: 40,  nebulaCount: 3,  cometDensity: 6,  blackHoleDensity: 0,  deadStarDensity: 2,  color: [0.4, 0.2, 0.1] },
-        NEBULA_CORRIDOR:  { range: [3000, 5000], asteroidDensity: 20,  nebulaCount: 6,  cometDensity: 8,  blackHoleDensity: 4,  deadStarDensity: 3,  color: [0.3, 0.15, 0.4] },
-        WORMHOLE:         { range: [5000, 7000], asteroidDensity: 60,  nebulaCount: 8,  cometDensity: 10, blackHoleDensity: 8,  deadStarDensity: 4,  color: [0.2, 0.1, 0.5] },
+        OPEN_SPACE:       { range: [0, 1000],   asteroidDensity: 10,  nebulaCount: 2,  cometDensity: 3,  blackHoleDensity: 0,  deadStarDensity: 1,  stationDensity: 0,  color: [0.1, 0.15, 0.3] },
+        ASTEROID_BELT:    { range: [1000, 3000], asteroidDensity: 40,  nebulaCount: 3,  cometDensity: 6,  blackHoleDensity: 0,  deadStarDensity: 2,  stationDensity: 2,  color: [0.4, 0.2, 0.1] },
+        NEBULA_CORRIDOR:  { range: [3000, 5000], asteroidDensity: 20,  nebulaCount: 6,  cometDensity: 8,  blackHoleDensity: 4,  deadStarDensity: 3,  stationDensity: 3,  color: [0.3, 0.15, 0.4] },
+        WORMHOLE:         { range: [5000, 7000], asteroidDensity: 60,  nebulaCount: 8,  cometDensity: 10, blackHoleDensity: 8,  deadStarDensity: 4,  stationDensity: 4,  color: [0.2, 0.1, 0.5] },
     },
     POST_7000_MULTIPLIER: 1.5,        // intensity multiplier for repeated biome cycles
 
@@ -338,6 +349,7 @@ Render through `EffectComposer`:
 3. **ChromaticAberrationPass** — Custom ShaderPass (RGB channel offset scaling with ship velocity, max 0.003 at top speed). Skip on low-end devices.
 4. **Vignette** — Custom ShaderPass: darken edges, darkness 0.5, offset 0.2.
 5. **FilmGrainPass** — Custom ShaderPass: noise overlay, intensity 0.03. Skip on low-end.
+6. **WormholeBlurPass** — Custom ShaderPass, active only while the ship is inside a wormhole wall shell: gaussian blur + UV distortion + chromatic fringe, intensity ramps with wall penetration, fades 0.5 s after exit. Single full-screen pass, runs on all devices.
 
 Low-end device detection: `navigator.hardwareConcurrency < 4` → skip chromatic aberration and film grain.
 
@@ -378,13 +390,13 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 
 ### 5.8 Biome-Specific Visuals
 
-| Biome | Distance | Asteroid density | Nebula count | Comets | Black holes | Dead stars | Colors | Visual signature |
-|-------|----------|-----------------|--------------|--------|-------------|------------|--------|-----------------|
-| Open space | 0-1000 | 10/chunk | 2 | 3/chunk | 0 | 1%/chunk | Blue-black | Sparse stars, 1-2 small nebulae |
-| Asteroid belt | 1000-3000 | 40/chunk | 3 | 6/chunk | 0 | 2%/chunk | Orange/red | Dense rocks, warm nebula, debris, comet streaks |
-| Nebula corridor | 3000-5000 | 20/chunk | 6 | 8/chunk | 4%/chunk | 3%/chunk | Multi-hue | Billowing clouds, comet trails, first black holes |
-| Wormhole | 5000-7000 | 60/chunk | 8 | 10/chunk | 8%/chunk | 4%/chunk | Purple/blue/cyan | Curved tunnel, vortex, black hole accretion glow |
-| 7000+ repeat | — | ×1.5 all | ×1.5 all | ×1.5 | ×1.5 | ×1.5 | All | Biome cycle repeats with increased intensity |
+| Biome | Distance | Asteroid density | Nebula count | Comets | Black holes | Dead stars | Stations | Colors | Visual signature |
+|-------|----------|-----------------|--------------|--------|-------------|------------|----------|--------|-----------------|
+| Open space | 0-1000 | 10/chunk | 2 | 3/chunk | 0 | 1%/chunk | 0 | Blue-black | Sparse stars, 1-2 small nebulae |
+| Asteroid belt | 1000-3000 | 40/chunk | 3 | 6/chunk | 0 | 2%/chunk | 2%/chunk | Orange/red | Dense rocks, warm nebula, debris, comet streaks |
+| Nebula corridor | 3000-5000 | 20/chunk | 6 | 8/chunk | 4%/chunk | 3%/chunk | 3%/chunk | Multi-hue | Billowing clouds, comet trails, first black holes |
+| Wormhole | 5000-7000 | 60/chunk | 8 | 10/chunk | 8%/chunk | 4%/chunk | 4%/chunk | Purple/blue/cyan | Curved tunnel, vortex, black hole accretion glow |
+| 7000+ repeat | — | ×1.5 all | ×1.5 all | ×1.5 | ×1.5 | ×1.5 | ×1.5 | All | Biome cycle repeats with increased intensity |
 
 ### 5.9 Speed & Motion Effects
 
@@ -440,7 +452,7 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 - Fire: Space or left click → single laser burst. Rate-limited to `FIRE_RATE` (8 shots/s).
 - Projectile: visible glowing beam (thin CylinderGeometry, emissive + bloom), travels forward relative to ship heading.
 - Speed: 200 units/s. Lifetime: 3s OR range 200 units (whichever first).
-- Destructible targets: asteroids, rocks, debris, comets. Non-destructible: large space stations, wormhole walls, black holes (projectiles are swallowed by the event horizon with no effect), dead stars (lasers spark harmlessly on the surface).
+- Destructible targets: asteroids, rocks, debris, comets. Non-destructible: space stations, wormhole walls (pass-through + blur, see §6.3), black holes (projectiles swallowed by the event horizon with no effect), dead stars (lasers spark harmlessly on the surface).
 - Impact feedback: spark particles (10-20, 0.3s fade) + screen flash + explosion sound.
 - Asteroid HP: large 100 / medium 50 / small 25 → 4 / 2 / 1 shots at 25 dmg.
 
@@ -461,7 +473,7 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 7. Black holes (`blackHoleDensity` % chance per chunk, NEBULA_CORRIDOR onward only)
 8. Dead stars (`deadStarDensity` % chance per chunk, max 1 per chunk, min 1500 u spacing)
 
-**Wormhole tunnel**: `TubeGeometry` along a curved CatmullRom path through the chunk. Walls use custom ShaderMaterial with swirling UV distortion. Particle vortex (200+ particles) spiraling through center. Ship must navigate through opening.
+**Wormhole tunnel**: `TubeGeometry` along a curved CatmullRom path through the chunk. Walls use custom ShaderMaterial with swirling UV distortion. Particle vortex (200+ particles) spiraling through center. **Walls are pass-through**: flying inside the wall shell (distance from centerline between `WORMHOLE_TUNNEL_RADIUS` and `WORMHOLE_TUNNEL_RADIUS + WORMHOLE_WALL_THICKNESS`) triggers the WormholeBlurPass — heavy blur + distortion, intensity ramps with penetration, fades `WORMHOLE_BLUR_FADE` after exiting. No damage, no slowdown — the opening is the comfortable path, cutting through a wall is the shortcut with a visual cost.
 
 **Intensity scaling** (within each biome zone, linear interpolation):
 - Asteroid count × (1 + distance/5000)
@@ -522,6 +534,13 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 - **Collision**: touching the surface = instant death (PLAYER_DIED reason `dead_star`), death screen "VAPORIZED BY A DEAD STAR".
 - **Warning**: pulsing red "⚠ STELLAR REMNANT" HUD text within 60 u of the surface.
 - **Visible from afar**: red point light (range 600) + 6× glow sprite with bloom — spot it from several chunks away and steer around it.
+
+### 6.9 Space Stations (decorative)
+
+- Rare artificial structures, spawn via `stationDensity` % chance per chunk (0% Open Space, 2% Asteroid Belt, 3% Nebula Corridor, 4% Wormhole), max 1 per chunk, ≥ 300 u from the ship. Seeded.
+- **Look**: procedural station — central cylindrical hull (length 12-20 u), torus ring around the middle, emissive window bands, slow rotation, blinking beacon light (small emissive sphere). Grey/blue PBR.
+- **Behavior**: decorative and non-destructible — no score, lasers spark off the hull, collision = 20 dmg (solid, like a large asteroid).
+- **Future-proofing**: stations are standalone entities with stable IDs in a world registry, deliberately kept out of the chunk-cleanup path (persist while in range) and data-modeled rather than ad-hoc — a later version may give them real functionality (landing, trading, refuel).
 
 ---
 
@@ -701,6 +720,7 @@ export const Events = {
     OBJECT_CONSUMED:    'environment:objectConsumed',    // { objectType, position } — asteroid/comet/debris eaten by a black hole
     BLACK_HOLE_SPAWNED: 'environment:blackHoleSpawned',  // { position, radius }
     DEAD_STAR_SPAWNED:  'environment:deadStarSpawned',   // { position, radius }
+    STATION_SPAWNED:    'environment:stationSpawned',    // { position, scale }
     CHUNK_SPAWNED:      'environment:chunkSpawned',     // { chunkX, chunkZ }
     CHUNK_CLEANED:      'environment:chunkCleaned',
     BIOME_CHANGED:      'environment:biomeChanged',     // { from, to }
@@ -755,6 +775,7 @@ npm run preview   # Preview production build
 | Camera disorientation in free flight | Keep camera lerp smooth (CAMERA_DAMPING), never snap; roll is visual only |
 | Comet trail overdraw | Trails are additive/dark sprites with short lifetimes — pooling keeps draw calls flat |
 | Many point lights | Dead star + nebula lights are the only dynamic lights — cull by range (dead star range 600, decay 2), keep ≤ 8 active |
+| Wormhole blur pass cost | Single full-screen pass driven by one intensity uniform; render only while ship is inside a wall shell |
 
 ---
 
@@ -844,6 +865,7 @@ npm run preview   # Preview production build
 - [ ] P9.3 Seeded RNG: same coords = same content
 - [ ] P9.4 Biome variation: distinct visual signatures
 - [ ] P9.5 Infinite exploration: no environment end
+- [ ] P9.6 Wormhole walls pass-through: blur pass ramps in/out with penetration, no damage
 
 ### Phase 10 — Game Flow
 - [ ] P10.1 Health system: collision damage, health bar update
@@ -887,6 +909,11 @@ npm run preview   # Preview production build
 - [ ] P14.4 Collision = instant death "VAPORIZED BY A DEAD STAR"
 - [ ] P14.5 Indestructible, no score; lasers spark on surface
 - [ ] P14.6 "⚠ STELLAR REMNANT" warning within 60 u of surface
+
+### Phase 15 — Space Stations
+- [ ] P15.1 Stations visible in Asteroid Belt+ biomes: hull + ring + emissive windows + beacon
+- [ ] P15.2 Decorative: non-destructible, no score, lasers spark off hull, 20 dmg collision
+- [ ] P15.3 Max 1 per chunk, ≥ 300 u from ship; registered with stable IDs for future features
 
 ---
 
