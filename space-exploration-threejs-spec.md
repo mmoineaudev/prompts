@@ -229,11 +229,16 @@ export const Constants = {
     BLACK_HOLE_RADIUS: 8,             // event horizon — anything closer is consumed
     BLACK_HOLE_GRAVITY_RADIUS: 450,   // influence radius (units) — tripled
     BLACK_HOLE_GRAVITY_STRENGTH: 7500,// acceleration = strength / distance² (capped at 120) — tripled
-    BLACK_HOLE_SHIP_PULL_FACTOR: 0.5, // ship feels half the pull (escapable hazard)
+    BLACK_HOLE_SHIP_PULL_FACTOR: 1.0, // ship feels the FULL pull (real impact)
     BLACK_HOLE_DISK_SPEED: 0.5,       // accretion disk rotation (rad/s)
     BLACK_HOLE_MAX_PULL: 120,         // u/s² gravity cap
     BLACK_HOLE_WARNING_RANGE: 40,     // u from the horizon surface
     BLACK_HOLE_MIN_DISTANCE: 3000,    // only spawns from Nebula Corridor onward
+    BLACK_HOLE_ATTRACT_RANGE: 400,    // holes attract each other within this
+    BLACK_HOLE_ATTRACT_STRENGTH: 40000, // mutual acceleration = strength / d² (~8 s merge at 100 u)
+    BLACK_HOLE_MAX_PULL_BETWEEN: 80,  // cap on mutual pull
+    BLACK_HOLE_MERGE_DISTANCE: 24,    // collapse when two holes get this close
+    BLACK_HOLE_COLLAPSE_RADIUS: 60,   // ship within this of a collapse takes 50 damage
 
     // Dead stars (stellar remnants)
     DEAD_STAR_RADIUS_MIN: 25,         // great size — dwarfs everything else
@@ -541,12 +546,13 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 ### 6.7 Black Holes
 
 - Rare gravitational anomalies; spawn from Nebula Corridor onward (`blackHoleDensity` 4% / 8% chance per chunk, never in Open Space or Asteroid Belt).
-- **Gravity well**: every asteroid, comet, and debris object within `BLACK_HOLE_GRAVITY_RADIUS` (150 u) accelerates toward the center with `a = BLACK_HOLE_GRAVITY_STRENGTH / d²` (capped at 120 u/s²). **The closer, the stronger the pull.**
-- **Ship**: feels the same pull × `BLACK_HOLE_SHIP_PULL_FACTOR` (0.5) — a real hazard that must be thrust against, but escapable at the edge of the well.
+- **Gravity well**: every asteroid, comet, and debris object within `BLACK_HOLE_GRAVITY_RADIUS` (450 u) accelerates toward the center with `a = BLACK_HOLE_GRAVITY_STRENGTH / d²` (capped at 120 u/s²). **The closer, the stronger the pull.**
+- **Ship**: feels the **full pull** (`BLACK_HOLE_SHIP_PULL_FACTOR` 1.0) — a real hazard that must be thrust against; near the horizon the pull (up to 120 u/s²) overwhelms the engines and the ship is dragged in.
 - **Consumption**: any object (asteroid, comet, debris, projectile, ship) crossing `BLACK_HOLE_RADIUS` (8 u) disappears with a brief accretion flash. No explosion debris, no score.
 - Ship consumed → instant death, death screen title "CONSUMED BY A BLACK HOLE".
 - Black holes cannot be damaged or destroyed. Wormhole biome can contain both a tunnel and a black hole.
 - **Warning**: pulsing red "⚠ EVENT HORIZON" HUD text within `BLACK_HOLE_WARNING_RANGE` (40 u) of the horizon surface.
+- **Mutual attraction & collapse**: black holes attract each other (`BLACK_HOLE_ATTRACT_STRENGTH / d²`, capped). When two holes come within `BLACK_HOLE_MERGE_DISTANCE` (24 u), they **collapse**: both vanish in a massive flash + shockwave (white screen flash, big shake, deep boom). The ship within `BLACK_HOLE_COLLAPSE_RADIUS` (60 u) takes 50 damage. Emits `environment:blackHoleCollapsed`.
 
 ### 6.8 Dead Stars
 
@@ -605,6 +611,7 @@ All audio is procedurally synthesized via Web Audio API oscillators and noise. *
 | Warning beep | Health < 30 | 800Hz sine, 3 pulses (50ms on, 150ms off), repeating every 2s |
 | Biome transition | Zone change | Rising arpeggio: 3 sine tones (200, 300, 500Hz), 0.3s each |
 | Black hole consumption | Object crosses horizon | Descending sweep 300→60Hz (0.4s) + low sub thump |
+| Black hole collapse | Two holes merge | Massive boom: noise burst (lowpass 1500→60Hz, 1.3s) + sub drop 120→25Hz |
 | Comet destruction | Comet destroyed | Deep rumble + crackle burst (noise, low-pass 400Hz, 0.6s) |
 
 **Spatial audio**: explosion sounds panned based on direction from ship (optional).
@@ -740,7 +747,8 @@ export const Events = {
     DEBRIS_DESTROYED:   'environment:debrisDestroyed',
     COMET_DESTROYED:    'environment:cometDestroyed',    // { position, score }
     OBJECT_CONSUMED:    'environment:objectConsumed',    // { objectType, position } — asteroid/comet/debris eaten by a black hole
-    BLACK_HOLE_SPAWNED: 'environment:blackHoleSpawned',  // { position, radius }
+    BLACK_HOLE_SPAWNED: 'environment:blackHoleSpawned',
+    BLACK_HOLE_COLLAPSED: 'environment:blackHoleCollapsed',  // { position, radius }
     DEAD_STAR_SPAWNED:  'environment:deadStarSpawned',   // { position, radius }
     STATION_SPAWNED:    'environment:stationSpawned',    // { position, scale }
     CHUNK_SPAWNED:      'environment:chunkSpawned',     // { chunkX, chunkZ }
@@ -922,9 +930,11 @@ npm run preview   # Preview production build
 - [ ] P13.3 Black holes spawn in Nebula Corridor+, accretion disk + photon ring visible
 - [ ] P13.4 Gravity: asteroids/comets/debris accelerate toward hole — stronger when closer
 - [ ] P13.5 Objects consumed at event horizon: disappear with flash, no debris
-- [ ] P13.6 Ship pulled (weakly) near a hole; touching horizon = death "CONSUMED BY A BLACK HOLE"
+- [ ] P13.6 Ship feels full pull near a hole; touching horizon = death "CONSUMED BY A BLACK HOLE"
 - [ ] P13.7 Projectiles swallowed by horizon; hole indestructible
 - [ ] P13.8 Event horizon warning shows within 40 u of horizon
+- [ ] P13.9 Ship feels full gravity pull; inescapable close to the horizon
+- [ ] P13.10 Black holes attract each other; close pairs collapse in a flash (shockwave damages ship within 60 u)
 
 ### Phase 14 — Dead Stars
 - [ ] P14.1 Dead stars visible: huge dark-red spheres radiating red light, glow visible from afar
