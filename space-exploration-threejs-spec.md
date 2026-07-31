@@ -172,24 +172,30 @@ export const Constants = {
     SHIP_SPAWN: { x: 0, y: 2, z: 0 },
 
     // Headlight (powerful — reveals asteroids ahead)
-    HEADLIGHT: { intensity: 4.0, range: 70, angle: 0.65, penumbra: 0.5, color: 0xffffff },
+    HEADLIGHT: { intensity: 6.5, range: 95, angle: 0.7, penumbra: 0.45, color: 0xffffff },
 
     // Electromagnetic shield (right-click hold)
     SHIELD: { radius: 5.5, energyMax: 100, drainPerSec: 25, regenPerSec: 15, deflectPower: 25 },
 
     // Camera
-    CAMERA_DISTANCE: 12,          // behind ship
-    CAMERA_HEIGHT: 5,             // above ship
+    CAMERA_DISTANCE: 6,           // behind ship (half of original 12)
+    CAMERA_HEIGHT: 3,             // above ship (half of original 5)
     CAMERA_FOV_REST: 75,          // normal FOV
     CAMERA_FOV_MAX: 95,           // FOV at max thrust
     CAMERA_DAMPING: 0.05,         // lerp factor per frame
 
-    // Weapon
+    // Weapon — large green beam
     FIRE_RATE: 8,                 // shots per second
     PROJECTILE_SPEED: 200,        // units/s
     PROJECTILE_LIFETIME: 3.0,     // seconds
     PROJECTILE_RANGE: 200,        // units (whichever reached first)
     PROJECTILE_DAMAGE: 25,
+    LASER_LENGTH: 9,              // beam length (u)
+    LASER_RADIUS: 0.18,           // beam core radius (u)
+    LASER_GLOW_RADIUS: 0.5,       // outer glow radius (u)
+    LASER_HIT_RADIUS: 1.8,        // collision radius (u)
+    LASER_COLOR: 0x33ff66,        // green
+    LASER_GLOW_COLOR: 0x22ff66,
 
     // Health
     MAX_HEALTH: 100,
@@ -348,7 +354,7 @@ Billboarded sprite clusters (8-12 overlapping billboards per cluster) with custo
 | Ambient | AmbientLight | 0.05 | Base visibility |
 | Directional | DirectionalLight | 0.3 | Shading on asteroids |
 | Nebula cores | PointLight[] (≤4/chunk) | 0.8-1.5 | Local illumination, color accents |
-| Ship headlight | SpotLight (cone ahead) | 4.0, range 70 | Powerful — illuminates path, reveals asteroids ahead |
+| Ship headlight | SpotLight (cone ahead) | 6.5, range 95 | Very powerful — illuminates path, reveals asteroids ahead |
 | Ship accent | PointLight (below ship) | 0.4, blue/purple | Rim glow, cinematic feel |
 | Dead stars | PointLight (at core) | 3.0, range 600, red | Landmark glow, tints nearby objects |
 
@@ -464,7 +470,7 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 ### 6.2 Weapon System
 
 - Fire: Space or left click → single laser burst. Rate-limited to `FIRE_RATE` (8 shots/s).
-- Projectile: visible glowing beam (thin CylinderGeometry, emissive + bloom), travels forward relative to ship heading.
+- Projectile: **large green beam** — thick core cylinder (radius 0.18) + outer glow cylinder (radius 0.5) + bright tip sprite, all green/additive/bloom, 9 u long; travels forward relative to ship heading. Generous collision radius (1.8 u).
 - Speed: 200 units/s. Lifetime: 3s OR range 200 units (whichever first).
 - Destructible targets: asteroids, rocks, debris, comets. Non-destructible: space stations, wormhole walls (pass-through + blur, see §6.3), black holes (projectiles swallowed by the event horizon with no effect), dead stars (lasers spark harmlessly on the surface).
 - Impact feedback: spark particles (10-20, 0.3s fade) + screen flash + explosion sound.
