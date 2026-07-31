@@ -67,20 +67,21 @@ All input uses **event.code** for AZERTY/QWERTY compatibility:
 
 | Action | AZERTY | QWERTY (equivalent) | Notes |
 |--------|--------|---------------------|-------|
-| Move forward / thrust | Z | W | Hold for continuous acceleration |
+| Pitch down / dive | Z | W | Rotate nose down |
 | Move left | Q | A | Strafe |
 | Move right | D | D | Strafe |
-| Move backward | S | S | Decelerate |
+| Pitch up / climb | S | S | Rotate nose up |
 | Roll left | A | A | Smooth interpolated roll rotation |
 | Roll right | E | E | Smooth interpolated roll rotation |
 | Fire weapon | Space or Left Click | Space or Left Click | Single laser burst, rate-limited |
 | Pitch up / down | Mouse up / down | Mouse up / down | Y-axis look, smooth interpolation |
 | Yaw left / right | Mouse left / right | Mouse left / right | X-axis look, smooth interpolation |
+| Throttle 0-100% | Scroll wheel | Scroll wheel | Set target speed fraction; up = more thrust |
 | Pause | Escape | Escape | |
 | Mute audio | M | M | Toggle all sound |
 | Restart (on death) | R | R | |
 
-**Arrow keys** also work as aliases: Up=Z, Down=S, Left=Q, Right=D.
+**Arrow keys** also work as aliases: Up=Z (dive), Down=S (climb), Left=Q, Right=D.
 
 **Touch/mobile**: virtual joystick overlay (left half = movement, right half = look: drag to pitch/yaw). Tap to fire. Two-finger swipe to roll.
 
@@ -162,9 +163,11 @@ export const Constants = {
     // Ship
     MAX_SHIP_SPEED: 80,           // units/s
     SHIP_ACCELERATION: 40,        // units/s²
-    SHIP_DRAG: 0.98,              // per-frame multiplier (velocity *= drag when thrust released)
+    SHIP_DRAG: 0.98,              // per-frame multiplier for lateral drift decay
     SHIP_ROLL_SPEED: 3.0,         // rad/s
     MOUSE_LOOK_SPEED: 0.0025,     // rad per pixel, yaw & pitch (free flight)
+    KEYBOARD_PITCH_SPEED: 1.5,    // rad/s for Z (dive) / S (climb)
+    THROTTLE_SCROLL_SENSITIVITY: 0.0005, // throttle change per scroll deltaY
     SHIP_SPAWN: { x: 0, y: 2, z: 0 },
 
     // Camera
@@ -440,10 +443,10 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 
 ### 6.1 Player Ship
 
-- **Free flight**: the ship has a free 3D heading (yaw + pitch). Mouse X = yaw, mouse Y = pitch at `MOUSE_LOOK_SPEED`; heading rotates smoothly and the camera reorients behind it with damping. A/E keys roll (visual + slight turn assist — no lift physics).
-- **Movement**: Inertia-based. Thrust (Z key held) → acceleration at `SHIP_ACCELERATION` **along the ship's local -Z axis**. Release → velocity decays at `SHIP_DRAG` multiplier per frame.
+- **Free flight**: the ship has a free 3D heading (yaw + pitch). Mouse X = yaw, mouse Y = pitch at `MOUSE_LOOK_SPEED`; Z/S keys pitch at `KEYBOARD_PITCH_SPEED` (Z = dive, S = climb); heading rotates smoothly and the camera reorients behind it with damping. A/E keys roll (visual + slight turn assist — no lift physics).
+- **Movement**: throttle-based. The scroll wheel sets `throttle` (0..1, shown as 0-100%). Each frame the forward velocity component accelerates at `SHIP_ACCELERATION` toward `throttle × MAX_SHIP_SPEED` along the ship's local -Z axis — so throttle 0 decelerates to a stop, throttle 100% cruises at max speed.
 - **Max speed**: Capped at `MAX_SHIP_SPEED` (80 units/s).
-- **Strafing**: Q/D for lateral movement along the ship's local X axis at same acceleration/drag.
+- **Strafing**: Q/D for lateral movement along the ship's local X axis at same acceleration; lateral drift decays via `SHIP_DRAG`.
 - **Forward direction**: fully player-controlled heading; camera trails behind the heading (CAMERA_DISTANCE / CAMERA_HEIGHT in ship-local space, damped).
 - **Camera roll**: the camera does NOT inherit ship roll — it eases back toward world-up, preventing disorientation during rolls.
 
