@@ -74,6 +74,7 @@ All input uses **event.code** for AZERTY/QWERTY compatibility:
 | Roll left | A | A | Smooth interpolated roll rotation |
 | Roll right | E | E | Smooth interpolated roll rotation |
 | Fire weapon | Space or Left Click | Space or Left Click | Single laser burst, rate-limited |
+| Shield (hold) | Right Click | Right Click | EM shield deflects asteroids/debris/comets, drains energy |
 | Pitch up / down | Mouse up / down | Mouse up / down | Y-axis look, smooth interpolation |
 | Yaw left / right | Mouse left / right | Mouse left / right | X-axis look, smooth interpolation |
 | Throttle 0-100% | Scroll wheel | Scroll wheel | Set target speed fraction; up = more thrust |
@@ -170,6 +171,12 @@ export const Constants = {
     THROTTLE_SCROLL_SENSITIVITY: 0.0005, // throttle change per scroll deltaY
     SHIP_SPAWN: { x: 0, y: 2, z: 0 },
 
+    // Headlight (powerful — reveals asteroids ahead)
+    HEADLIGHT: { intensity: 4.0, range: 70, angle: 0.65, penumbra: 0.5, color: 0xffffff },
+
+    // Electromagnetic shield (right-click hold)
+    SHIELD: { radius: 5.5, energyMax: 100, drainPerSec: 25, regenPerSec: 15, deflectPower: 25 },
+
     // Camera
     CAMERA_DISTANCE: 12,          // behind ship
     CAMERA_HEIGHT: 5,             // above ship
@@ -214,8 +221,8 @@ export const Constants = {
 
     // Black holes
     BLACK_HOLE_RADIUS: 8,             // event horizon — anything closer is consumed
-    BLACK_HOLE_GRAVITY_RADIUS: 150,   // influence radius (units)
-    BLACK_HOLE_GRAVITY_STRENGTH: 2500,// acceleration = strength / distance² (capped at 120)
+    BLACK_HOLE_GRAVITY_RADIUS: 450,   // influence radius (units) — tripled
+    BLACK_HOLE_GRAVITY_STRENGTH: 7500,// acceleration = strength / distance² (capped at 120) — tripled
     BLACK_HOLE_SHIP_PULL_FACTOR: 0.5, // ship feels half the pull (escapable hazard)
     BLACK_HOLE_DISK_SPEED: 0.5,       // accretion disk rotation (rad/s)
     BLACK_HOLE_MAX_PULL: 120,         // u/s² gravity cap
@@ -254,8 +261,11 @@ export const Constants = {
 
     // World / chunks
     CHUNK_SIZE: 200,                  // units per chunk (square)
-    CHUNKS_AHEAD: 3,                  // chunks spawned ahead of ship
+    CHUNKS_RADIUS: 2,                  // chunks kept around ship (Chebyshev distance)
     CHUNKS_BEHIND: 2,                 // chunks retained behind ship
+    CHUNKS_VERTICAL_RADIUS: 1,        // 3 vertical layers: below, current, above
+    CONTENT_Y_BAND: 90,               // ±u within each chunk's Y layer
+    DENSITY_REDUCTION: 0.75,          // per-layer density (3 layers × 0.75 ≈ 2.25× old total)
     SHIP_FORWARD_AXIS: 'z',           // ship's forward axis is local -Z (heading is free)
 
     // Biomes (distance in units traveled)
@@ -338,7 +348,7 @@ Billboarded sprite clusters (8-12 overlapping billboards per cluster) with custo
 | Ambient | AmbientLight | 0.05 | Base visibility |
 | Directional | DirectionalLight | 0.3 | Shading on asteroids |
 | Nebula cores | PointLight[] (≤4/chunk) | 0.8-1.5 | Local illumination, color accents |
-| Ship headlight | SpotLight (cone ahead) | 1.0, range 30 | Illuminates path, reveals debris |
+| Ship headlight | SpotLight (cone ahead) | 4.0, range 70 | Powerful — illuminates path, reveals asteroids ahead |
 | Ship accent | PointLight (below ship) | 0.4, blue/purple | Rim glow, cinematic feel |
 | Dead stars | PointLight (at core) | 3.0, range 600, red | Landmark glow, tints nearby objects |
 
@@ -449,6 +459,7 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 - **Strafing**: Q/D for lateral movement along the ship's local X axis at same acceleration; lateral drift decays via `SHIP_DRAG`.
 - **Forward direction**: fully player-controlled heading; camera trails behind the heading (CAMERA_DISTANCE / CAMERA_HEIGHT in ship-local space, damped).
 - **Camera roll**: the camera does NOT inherit ship roll — it eases back toward world-up, preventing disorientation during rolls.
+- **EM shield (right-click hold)**: a translucent energy bubble (radius `SHIELD.radius`) deflects asteroids, debris and comets — they are pushed away with `SHIELD.deflectPower` instead of damaging the ship. Drains `SHIELD.drainPerSec` while active, regenerates `SHIELD.regenPerSec` when off; HUD shield bar shows charge.
 
 ### 6.2 Weapon System
 
@@ -487,7 +498,8 @@ Vertex displacement via simplex noise during geometry creation. Per-instance col
 
 **World rules:**
 - Biome distance = cumulative odometer (monotonic — never regresses on backward flight).
-- Content spawns in a Y band of ±60 u around the ship's Y (chunk grid tracks X/Z only).
+- **3 vertical chunk layers** (`CHUNKS_VERTICAL_RADIUS` = 1): below, current and above are always loaded; content spawns at `cy × CHUNK_SIZE ± CONTENT_Y_BAND`. Flying up or down loads new layers seamlessly.
+- Per-layer entity density is reduced by `DENSITY_REDUCTION` (0.75) so the total world stays performant.
 - Asteroid base drift: 1-4 u/s in a random direction + slow tumble; speed scales ×(1 + distance/6000).
 - Debris count per chunk: `round(asteroidDensity × DEBRIS_DENSITY_FACTOR)`, seeded.
 - Fairness guards: comets spawn ≥ 150 u from the ship; dead stars ≥ 400 u (they are huge).
@@ -556,6 +568,7 @@ All UI is HTML/CSS DOM overlay on top of canvas (not 3D objects).
 | Score | Top-left | `SCORE: 12,450` |
 | Distance | Top-center | `DISTANCE: 3,200 u` |
 | Health bar | Bottom-center | Horizontal bar: green (>50) → yellow (30-50) → red (<30) with pulse animation |
+| Shield bar | Bottom-center (above health) | Cyan bar showing shield energy; brightens while active |
 | Crosshair | Center | Subtle reticle: thin circle (radius 12px) + 4 dots (NSEW), white at 50% opacity |
 | Biome indicator | Top-right | Current biome name, fades in/out on transition |
 | Speed indicator | Bottom-left | Small bar showing thrust fraction |
@@ -821,6 +834,7 @@ npm run preview   # Preview production build
 - [ ] P3.6 Camera follows ship with damping, cinematic offset
 - [ ] P3.7 Free flight: mouse yaw/pitch rotates heading, thrust follows local -Z
 - [ ] P3.8 Camera reorients behind ship heading with damping, no snapping
+- [ ] P3.9 Right-click shield: bubble visible, deflects asteroids/debris/comets, energy drains/regens
 
 ### Phase 4 — Starfield
 - [ ] P4.1 Three-layer parallax starfield visible
@@ -869,6 +883,7 @@ npm run preview   # Preview production build
 - [ ] P9.4 Biome variation: distinct visual signatures
 - [ ] P9.5 Infinite exploration: no environment end
 - [ ] P9.6 Wormhole walls pass-through: blur pass ramps in/out with penetration, no damage
+- [ ] P9.7 3 vertical chunk layers always loaded; flying up/down spawns new layers seamlessly
 
 ### Phase 10 — Game Flow
 - [ ] P10.1 Health system: collision damage, health bar update
