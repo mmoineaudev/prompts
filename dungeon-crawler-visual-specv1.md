@@ -659,7 +659,106 @@ In-game invariants: memory stable over 3 descends (no leaks — teardown contrac
 
 ---
 
-## 25. Explicitly out of scope / non-goals
+## 25. UX strings (binding)
+
+All player-facing text is part of the game feel and is binding (text is not a graphic element). Exact strings from the reference implementation:
+
+| Context | Text |
+|---|---|
+| Goal toasts (level start) | `Skeletons hunt you — reach the golden exit!` · `Slay them for orbs — shoot or swing` · `Level ${n} — descend!` (level > 1) · `New Game+ ${n} — the depths grow stronger` · `A new descent begins` |
+| Orb pickup | `Orb collected! +1 ammo` |
+| No ammo | `No orbs! Slay skeletons to gather orbs` (shown once per dry-fire stretch; resets after a successful shot) |
+| Entered exit room | `The depths await — press E to descend` |
+| Directional hint | every 8 s: `Golden exit lies ${dir} (${dist}m)` — dist in whole meters; dir from the 8-way compass (atan2 sectors of 45°: north / northeast / east / southeast / south / southwest / west / northwest) |
+| Weapon evolution | `Your blade awakens — Tier ${t}` · final tier: `Your blade is whole — the lightsaber sings` |
+| Electric chain | `ELECTRIC CHAIN — ${k} foes vaporized!` |
+| Boss defeated | `The Spectral Lord falls — a heart and a blessing are yours. The portal opens!` |
+| Death titles | `The dead claim you` (killed) · `The darkness consumes you` (time out) |
+| Death stats | `Level reached: ${level}${ng} · Total time: ${m}:${ss} · Souls: ${orbs}${rank}` |
+| Death buttons | `Restart — Level 1 [N]` · `New Game+ [Y] — Level ${half} (keep ${orbs} Souls · mobs +${10·ng}% HP)` |
+| Buff descriptions (title screen) | `No active buff` · `BRIGHT — the level lights up, enemies flee from you` · `FIREBALL — right-click hurls an explosive fireball` · `EMPOWERED — longer reach, faster movement & attacks` · `GODSPEED — +50% attack speed and +50% move speed` · `HUNTER — a spectral boss companion follows and attacks mobs` |
+| Perf warning | `⚠ DEGRADED MODE — decorations reduced for performance` |
+| HUD hint line | `WASD move · Shift sprint · LMB orb · RMB dagger · E descend · Tab ledger · P bloom` |
+| Prompts | `Click to explore` (pointer unlocked) · `The depths beckon further... [E] to descend` (exit prompt) · `[Tab] close` |
+| Leaderboard | title `DEPTH LEDGER` · empty `No runs yet — descend!` |
+| Biome labels | `STONE DUNGEON`, `HAUNTED CRYPT`, `FUNGAL CAVERN`, `VOLCANIC DEPTHS`, `FROZEN HALLS`, `CRYSTAL DEPTHS`, `POISON SWAMP`, `GOLDEN TEMPLE`, `FLOODED RUINS`, `EMBER FORGE`, `SPECTRAL COURT` |
+| Boss variant labels | `BONE LORD`, `IRON GHOUL`, `SPECTRAL HUNTER`, `ASH TITAN`, `SPECTRAL LORD`, `VERMIN KING`, `LICH ARCHMAGE` |
+| Loading screen | `LEVEL ${n}${ng}` + biome label + buff description + stats rows (Souls / DMG × / Orb DMG / Reach / Enemy HP / Mob speed / Spawns / Regen) |
+
+---
+
+## 26. Behavioral details & edge cases (binding)
+
+- **Sarcophagus** (CRYPT interactive): triggers on first proximity < 2.5 u; lid slides open over 0.6 s; 30% chance to spawn a Wraith (level-scaled); guaranteed 1 orb drop inside; one-time. Has a collision AABB.
+- **Exit portal**: golden ring + disc at the exit cell center, y 1.3; hidden until the boss dies on boss levels (`_bossPortalOpen`); `E` works only when `inExitRoom` (within 2 u of the exit cell center) AND the portal is open.
+- **Start/exit markers** (guidance): green ring + light at the entrance; golden ring + glow + vertical beam + light at the exit.
+- **God rays**: only in VAULT rooms — one additive light shaft per torch inside a VAULT.
+- **Water puddles**: VAULT rooms only, centered plane at y 0.02, with a gentle sine-wave vertex displacement in the update loop (per-frame vertex write, one mesh per VAULT). Decorative only.
+- **Step-on-breakables**: walking within 0.45 u of a breakable shatters it (same buff drop roll as a weapon/orb break).
+- **Orb explosion height gate**: the AOE only damages enemies when the blast point y < 2.6 (ground-level).
+- **Fire patches** (magic-blue from electric chain + BURN ground fire): visual + light ONLY, no damage; TTL 10 s, pool 6, quick grow-in (0.3 s) and end-fade.
+- **Lava/acid tick**: 1 damage per 0.8 s within 1.2 u of the pool center; i-frames respected; pools never within 3 u of the exit marker.
+- **No-ammo message**: shown once per dry-fire stretch; resets after a successful shot.
+- **Hit-stop**: world dt zeroed while active; camera shake, HUD, and input still process.
+- **Carried buff**: captured BEFORE the state is replaced; side effects re-applied only AFTER the level systems are rebuilt; when no buff is carried, stuck visuals are cleared (the gone-fireball fix).
+- **Rat pack**: one RAT roll spawns a pack of 2–3 rats at one cell; pack size clamps to the rat cap (6) and the live-body cap (16).
+- **Elite roll**: 1-in-10 per non-rat spawn, eligible types only; ARENA first spawn roll is guaranteed elite if its type is eligible.
+- **BURN**: never on boss or arena levels; spawns at the walkable cell farthest from the player once the level is cleared.
+- **Title gate**: lifts only when the rolling ~3 s average fps ≥ 30 AND the spawn queue is drained (spawn-drain prevents the post-title hitch); hard 8 s max-hold so the player is never trapped.
+- **Degraded mode**: frame hitches > 0.25 s and the title screen are excluded from the measurement; once degraded, the run stays degraded (§22).
+
+---
+
+## 27. Engineering gotchas & legacy (do not re-introduce, do not chase)
+
+- **Headless shim**: the verification scripts stub `document`/canvas. `Materials.js` gates normal/roughness map generation on `canvasCapable()` (presence of `createImageData`/`putImageData`/`getImageData`) and returns map-less materials otherwise; texture generators only run in a real browser. Preserve this pattern or the check suite cannot run.
+- **Electric proc hoist**: the 1% chain was once DEAD CODE because the constants lived nested under `SWORD.COMBO` and the reads at the top level were `undefined`. They now live at the `SWORD` level (`SWORD.ELECTRIC_CHANCE`, `SWORD.ELECTRIC_RANGE`) — keep them there.
+- **Carried buff ordering**: capture the buff before replacing `state`; re-apply its side effects AFTER `_initCombat` rebuilds skeletons/lighting; always clear stuck visuals when no buff is carried (this fixed the "fireball stuck on screen + sword hidden while buffEffect = 0" bug).
+- **Title gate**: lifting requires BOTH the fps window AND an empty spawn queue — the queue drain is what actually prevents the post-title hitch.
+- **Camera layers are load-bearing**: sword on layer 2 (the layer-0 headlight must never light it), enemy-glow pass on layer 1, world on layer 0. Preserve the scheme.
+- **Orb pool split**: 48 normal slots + 10 fireball slots; the round-robin allocator MUST filter by slot type so a volley never spawns an orange fireball mid-sequence.
+- **Legacy/unused (present but inert — do not build on them)**: `DUNGEON.TORCH_SPACING` (the real spacing is 16, in LightingSystem), `DUNGEON.ARCH_PROBABILITY` / `CRACK_PROBABILITY` (WorldBuilder builds no arches/cracks), the `minimapVisible` flag, the stamina-fill element (the stamina bar was removed; the element is kept pinned at 100%), the post-processing `xray` flag (no buff drives it), `totalOrbs` (per-level count, not scored).
+- **`window.game` is exposed** — keep it (the headless QA hook).
+- **Perf-cuts philosophy**: many systems carry "~90% cut" comments (smoke 90→9, dust 300→30, trail 4→1 per pool, sparks 4→1, death bursts 30→3, floor debris −80%). These are intentional; do not re-inflate them — the §22 budgets are the contract.
+
+---
+
+## 28. Design rationale & tuning philosophy (why the numbers are what they are)
+
+Use this when tuning or extending — keep the intent, not just the values.
+
+- **Orbs are ammo AND spawn pressure**: the same `orbPowerMultiplier` drives sword scale and enemy spawns; orbs above 100 stop growing the sword (cap ×4) and instead feed buff drops + extra spawns. Hoarding has diminishing returns and escalating risk — that is the game's economy.
+- **Souls ladder cap at 500 (tier 5)**: endgame damage 7/7/8 one-hits most of the fixed-HP roster but a brute (8 HP) still takes 2 hits; NG+ HP ×2 keeps the top tier honest. Uncapped damage would trivialize the roster.
+- **Total-only souls HUD**: the tier is a feel signal (form + toast), never a number. The HUD shows real state only — no fake meters.
+- **Buffs never repeat back-to-back** so every pickup is visibly different; breakable buffs cap at 90 s while boss buffs run 5 min uncapped — rewards scale with the source.
+- **Torchless biomes (FUNGAL, POISON)** are both a perf move (≈50 lights vs ≈135 if torchlit) and a theme move (lit by their own glow). When a biome is too heavy, cut structure like this — never lower the light ceiling.
+- **EMBER_FORGE Brute weight 35**: the forge is the last rung of the cycle — a deliberate finale pressure band.
+- **NG+ keeps 90% of orbs and starts at half the level**: a softer reset that preserves the power fantasy while mobs get +100% HP. The 10% tax is the only death penalty beyond the level reset.
+- **Buff carry ×5 (capped 90 s)**: smooths level transitions without letting a 5-minute boss buff trivialize the next level.
+- **The 30 fps floor is non-negotiable**: when a feature threatens it, CUT decisively (torchless biomes, density caps, 90% particle cuts, degraded mode). Never lower `LIGHT_CEILING`.
+- **Post-processing "5% rule"**: bloom, saturation, and the enemy glow all sit at ~5% of their original strength — atmosphere over spectacle, and ON by default (toggleable with P).
+- **Red is reserved for danger**: the idle sword's tint is never red (it would fake an "enemy nearby" signal); red/orange reads as threat everywhere in the game.
+
+---
+
+## 29. Manual QA checklist (human verification beyond the automated scripts)
+
+1. **Boot**: title appears; lifts ≥ 30 fps; safe-spawn counts 5 → 0; zero console errors.
+2. **Biome cadence**: levels 1–2 STONE, 3–4 CRYPT, 5–6 FUNGAL, 7 boss, 8 VOLCANIC, 9–10 FROZEN, 11–12 CRYSTAL, 13 POISON, 14 boss, 15–16 GOLDEN, 17–18 FLOODED, 19–20 EMBER, 21 boss, 22 STONE.
+3. **Boss levels (7/14/21)**: portal closed until the boss dies; boss bar shows; defeat grants the heart + 5-min buff + opens the portal.
+4. **Spawns**: biome weight mixes feel right; wraiths only in crypts; brutes surge in EMBER_FORGE; elites appear ~1-in-10 over a long session; the ARENA's first spawn is elite.
+5. **Sword**: combo 2/2/3 → 7/7/8 by tier; T3+ arc bolts; T5 double bolts every strike; the 1% electric chain eventually fires.
+6. **Orbs**: steps 2–3 of a sequence are free; step 3 explodes; holding LMB steps at 0.22 s; 0-orbs shows the warning once.
+7. **Buffs**: never back-to-back repeats; boss buff 5:00 uncapped; breakable buff ≤ 1:30; carry ×5 across levels; BRIGHT makes everything flee.
+8. **Degraded mode**: force low fps (throttling/devtools) → after ~10 s the warning appears and ~half the decorations vanish; the next level builds at 50%.
+9. **Memory**: 3 descends with stable RAM/GPU memory; no console warnings.
+10. **NG+**: death → [Y] keeps 90% of orbs, starts at half the level, mobs have +100% HP; [N] restarts clean at level 1.
+11. **Leaderboard**: entries rank NG+ → level → time → orbs; top 10 persist in localStorage.
+12. **Perf invariants**: `renderer.info` — draw calls ≤ 120, prop instances ≤ 400, lights ≤ ceiling, shadow casters = 8.
+
+---
+
+## 30. Explicitly out of scope / non-goals
 
 - **All graphic elements** (deliberate): colors, palette hexes, mesh geometry, prop recipes, particle visuals, post-processing look, HUD styling, textures, audio. Freedom within the identity descriptions and the budgets above. (Binding exceptions: the camera-layer scheme §12.1, the "5%" post-processing rule §12.2, pool sizes, and every budget in §22 — those are engineering, not looks.)
 - No audio system (visual cues only).
