@@ -484,10 +484,11 @@ Pipeline order (binding structure; the exact pass parameters are "~5% of the old
 ## 16. Enemies & spawning
 
 ### 16.1 Spawn system
-Per level (non-boss): compute slots and build a spawn PLAN (cheap data) then reveal one mob every `SPAWN_INTERVAL = 0.5 s` (first reveals immediately) so construction is spread out. While the title screen holds, spawns still drain but mobs are frozen (`frozen` flag); during safe spawn they idle.
+Per level (non-boss): compute slots and build a spawn PLAN (cheap data) then reveal one mob every `SPAWN_INTERVAL = 0.5 s` (first reveals immediately) so construction is spread out. A queued spawn within 30 m of the player is deferred (rotates to the back of the queue). While the title screen holds, spawns still drain but mobs are frozen (`frozen` flag); during safe spawn they idle. Mobs > 40 m from the player are frozen immobile (`FROZEN_DIST`).
 
-- **Slots**: `min(round((2 + (level − 1)) × spawnMult), MAX_ALIVE 16)`; +2 if an ARENA is present. `spawnMult = 1.1^(level−1) × orbPowerMultiplier(collectedOrbs) + max(0, orbs − 100)/100`.
+- **Slots**: `min(round((2 + (level − 1)) × spawnMult), MAX_ALIVE 100)`; +2 if an ARENA is present. `spawnMult = 1 + (level + souls)/10` (level AND banked souls both accelerate spawns). **Spawns only occur more than 30 m from the player** (`SPAWN_PLAYER_DIST`): a queued spawn whose spot is too close rotates to the back of the queue until the player moves away — nothing materializes next to you.
 - **Candidate cells**: non-empty cells at BFS distance ≥ 6 from the entrance, EXCLUDING the exit room; shuffled.
+- **Far-frozen bodies**: mobs more than 40 m from the player are IMMOBILE (`FROZEN_DIST` — idle in place, no AI/tracking/attacks), which makes the 100-body cap affordable (distant mobs cost almost nothing per frame).
 - **Type pick**: biome weight column × room-enemy modifiers, weighted sample.
 - **Rats**: a RAT roll spawns a pack of 2–3 at one cell (clamped to rat cap 6 and live-body cap), each rat a separate body; 0 drops.
 - **Elites**: 1-in-10 per non-rat spawn for eligible types (ARMORED, ARCHER, BRUTE, WRAITH). ARENA: first spawn roll guaranteed elite if eligible.
@@ -582,7 +583,7 @@ Rises once the ENTIRE level is cleared (no living non-boss enemies, spawn queue 
 
 | Source | Effect |
 |---|---|
-| Level | move speed ×(1 + 0.05(level−1)); attack speed ×(1 + 0.05·floor((level−1)/3)); **mob HP ×(1 + 0.1·floor(level/5))**; spawn slots +1/level (×spawnMult, cap 16); **spawnMult = 1 + (level + souls)/10** (level AND souls both accelerate spawns) |
+| Level | move speed ×(1 + 0.05(level−1)); attack speed ×(1 + 0.05·floor((level−1)/3)); **mob HP ×(1 + 0.1·floor(level/5))**; spawn slots +1/level (×spawnMult, cap 100); **spawnMult = 1 + (level + souls)/10** (level AND souls both accelerate spawns) |
 | Held orbs | sword scale +20%/10 orbs (cap ×4 at 150); orb damage +2%/orb; orbs > 100 add buff-drop chance |
 | Boss kills | +10% mob move AND attack speed each (permanent, multiplicative) |
 | NG+ | enemy HP ×(1 + 2·ngPlus) — NG+ effects doubled (× level-HP bonus above); run restarts at floor(level/2) keeping 90% of souls (flat toll) + the weapon tier |
