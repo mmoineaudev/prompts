@@ -12,8 +12,8 @@ Reference implementation: Three.js + Vite browser game (raw Three.js + `three/ex
 
 - **The descent**: endless, level-by-level descent. Each level is a procedurally generated dungeon with an entrance and a golden exit portal; reaching the exit advances to the next level. The level number never resets except on death.
 - **Orb economy as risk/reward**: orbs are BOTH ammo and score. Kills drop orbs; you spend orbs to shoot; holding orbs makes the sword bigger/stronger AND makes the game spawn more enemies (more pressure, more drops). Dying costs everything on a fresh run, or 10% of banked orbs on NG+.
-- **Souls-ladder progression**: a monotonic counter (lifetime orb pickups) drives a 6-tier sword evolution, from a crude blade to a lightsaber that throws electric arcs. The tier is communicated by the weapon's form and a toast — never by a number on the HUD.
-- **Escalation without reset**: enemy count, enemy speed/attack, and the timer all scale with level; biomes cycle underneath. Boss kills permanently buff all mobs (+10% speed/attack each). NG+ stacks +100% enemy HP per cycle.
+- **Souls-ladder progression**: the souls counter (orbs = souls — one notion) drives a 6-tier sword evolution; the tier locks at the max reached and is communicated by the weapon's form, the slot label and a toast — never by a number on the HUD.
+- **Escalation without reset**: enemy count, enemy speed/attack, and the timer all scale with level; biomes cycle underneath. Boss kills permanently buff all mobs (+10% speed/attack each). NG+ stacks +200% enemy HP per cycle (effects doubled).
 - **Timed pressure**: 180 seconds per level. Run out → the run ends.
 - **Buffs**: temporary, powerful, one at a time, looted from broken crates/barrels (or boss kills). Never the same buff twice in a row.
 - **Souls-like HUD**: hearts top-left (red bar), gold "Souls" counter, weapon slot, dark-fantasy panels. All HUD elements represent real state; no fake meters.
@@ -54,11 +54,11 @@ Input handling: `InputSystem` stores key/mouse state from `window` listeners (`k
 - **Boss cadence**: every 7th level (`BOSS.INTERVAL = 7`) is a single-boss arena: levels 7, 14, 21, 28… The boss biome (SPECTRAL_COURT) overrides the normal biome ladder on those levels.
 - **Timed run**: `TIMED_RUN.LEVEL_TIME_LIMIT = 180` seconds per level. `levelTime` counts up while playing; at 180 s the run ends (reason "time"). The run timer does not tick while the title screen holds the scene, and starts fresh after it lifts (so loading lag never counts).
 - **Death**: any lethal damage ends the run (reason "dead"). On death, the run is submitted to the leaderboard and the death screen offers **Restart [N]** (fresh run, level 1, everything reset), **New Game+ [Y]**, or **Save for later [S]**:
-  - NG+ starts at `max(1, floor(level / 2))`, keeps `floor(bankedOrbs * 0.9)` orbs, increments `ngPlus`, and keeps `bossKills`. Mobs get +100% HP per NG+ cycle AND +10% bonus HP every 5 levels (`enemyHpMultiplier = (1 + ngPlus) × (1 + 0.1·floor(level/5))`).
+  - NG+ starts at `max(1, floor(level / 2))`, keeps `floor(souls × 0.9)` (a flat 10% toll on the ONE souls counter — never a reset), increments `ngPlus`, keeps `bossKills`, and KEEPS the weapon tier (the ladder never downgrades). Mobs get **+200% HP per NG+ cycle (effects doubled)** AND +10% bonus HP every 5 levels (`enemyHpMultiplier = (1 + 2·ngPlus) × (1 + 0.1·floor(level/5))`).
   - A fresh restart: level 1, 0 orbs, ngPlus 0, bossKills 0, max health 3.
-  - **Save [S]** writes the run to localStorage (`dungeonCrawlerSave`) AND mirrors it to a file on disk via the companion save-server (`scripts/save-server.mjs`, port 5174, started by `launch.sh`): level, runTime, orbs, souls, weapon tier, permanent hearts, NG+ cycle, boss kills, plus the just-recorded death entry.
-- **Startup**: if a save exists, a menu offers **Load last save [L]** (shows level + souls) or **New Game [N]**. Loading restarts the SAVED LEVEL from the beginning — fresh level, full health, spawn protection — with ALL meta-progression intact: orbs (no 10% penalty), souls, weapon tier, permanent hearts, NG+ cycle unchanged, boss kills kept. The save is NOT consumed by loading: it persists until a new death-save overwrites it, so the Load option never disappears. At startup the game prefers the local copy and falls back to the file-backed server copy (survives browser storage wipes, private windows, and localhost-vs-LAN origin switches between server runs). The stale death entry is removed from the ledger (the run didn't end there). A buff never carries across a save-load.
-- **Level advance** (E at exit, non-boss or boss-after-death): keeps `runTime`, `level + 1`, `collectedOrbs`, `ngPlus`, `bossKills`, `soulsEarned`, `weaponTier`, `maxHealth` (permanent hearts), and carries an active buff with **×5 its remaining time, capped at 90 s**. Health always starts a new level at full. The buff's side effects are re-applied AFTER the level systems are rebuilt (never against disposed systems).
+  - **Save [S]** writes the run to localStorage (`dungeonCrawlerSave`) AND mirrors it to a file on disk via the companion save-server (`scripts/save-server.mjs`, port 5174, started by `launch.sh`): level, runTime, souls (the single orbs/souls counter), weapon tier, permanent hearts, NG+ cycle, boss kills, plus the just-recorded death entry.
+- **Startup**: if a save exists, a menu offers **Load last save [L]** (shows level + souls) or **New Game [N]**. Loading restarts the SAVED LEVEL from the beginning — fresh level, full health, spawn protection — with ALL meta-progression intact: souls (single counter, no 10% penalty on load), weapon tier, permanent hearts, NG+ cycle unchanged, boss kills kept. The save is NOT consumed by loading: it persists until a new death-save overwrites it, so the Load option never disappears. At startup the game prefers the local copy and falls back to the file-backed server copy (survives browser storage wipes, private windows, and localhost-vs-LAN origin switches between server runs). The stale death entry is removed from the ledger (the run didn't end there). A buff never carries across a save-load.
+- **Level advance** (E at exit, non-boss or boss-after-death): keeps `runTime`, `level + 1`, `collectedOrbs` (the one souls counter), `ngPlus`, `bossKills`, `weaponTier`, `maxHealth` (permanent hearts), and carries an active buff with **×5 its remaining time, capped at 90 s**. Health always starts a new level at full. The buff's side effects are re-applied AFTER the level systems are rebuilt (never against disposed systems).
 - **Boss defeat**: `bossKills++` (permanent +10% movement AND attack speed for all mobs, multiplicative), a 5-minute buff (uncapped duration), +1 permanent max heart (heal +1), and the exit portal opens.
 - **Loading/title screen** (each level): shows level number, biome name, active buff + description, and live stats (Souls, DMG ×, Orb DMG, Reach, Enemy HP, Mob speed, Spawns, Regen). It lifts when: the rolling average fps over a ~3 s window is ≥ 30 AND the enemy spawn queue is fully drained, or after a hard max-hold of 8 s. When it lifts: `safeSpawn = 5 s` and `invulnTimer = 5 s` (player rooted + invincible, mobs idle, countdown shown).
 
@@ -162,9 +162,8 @@ The **update loop** (`_animate`): rAF; `dt = min((now − last)/1000, 0.1)`; per
 ```js
 {
   player: { x, y, z, yaw, pitch },
-  collectedOrbs,        // banked ammo/score (persists across levels)
-  soulsEarned,          // lifetime orb pickups (monotonic) — evolution tier source
-  weaponTier,           // 0..5, derived from soulsEarned, persisted for form rebuild
+  collectedOrbs,        // THE ONE souls counter (orbs = souls): ammo, score, spawn + ladder source
+  weaponTier,           // 0..5, locked at the max reached (spending ammo never downgrades)
   ngPlus,               // NG+ cycle
   bossKills,            // permanent: +10% mob move/attack per kill
   totalOrbs,            // per-level pickup count (unused for scoring)
@@ -359,9 +358,9 @@ Combo window: 0.34 s from each recover start (0.14 recover + 0.20 input grace); 
 - The swing also: hits breakables in a slightly looser cone (±(maxDot−0.12)) over the full reach; breaks enemy projectiles in the cone (`breakProjectiles`).
 
 ### 9.3 Evolution (the Souls Ladder)
-`soulsEarned` increments by 1 on EVERY orb pickup (never health/buff). Persists across levels; resets on a fresh run; kept on NG+.
+`collectedOrbs` IS the souls counter (orbs = souls — ONE notion). Every orb pickup increments it; spending ammo lowers it, but the weapon tier LOCKS at the max reached (`weaponTier` only ever raises). NG+ keeps 90% of the counter (flat 10% toll) and keeps the tier. A fresh run resets both.
 
-- Tier: `min(floor(soulsEarned / 100), 5)`. Every tier: **+1 damage per hit** and a NEW weapon form (silhouette, color identity — see table). Strictly cumulative; never reverts.
+- Tier: `min(floor(collectedOrbs / 100), 5)` evaluated as a ceiling — once reached, never reverts. Every tier: **+1 damage per hit** and a NEW weapon form (silhouette, color identity — see table). Strictly cumulative; never reverts.
 
 | Tier | Souls | Form identity | Damage | Effects |
 |---|---|---|---|---|
@@ -539,7 +538,7 @@ Per level (non-boss): compute slots and build a spawn PLAN (cheap data) then rev
 | Wraith | 0 | 30 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 ### 16.5 Drops & score
-Drop-on-kill: Skeleton 1, Magician 1, Armored 2, Archer 1, Rat 0, Brute 3, Wraith 2, BURN 2, elites base+1. Orbs credit INSTANTLY on drop (`collectedOrbs++` AND `soulsEarned++`); the orb visual bobs ~`DROP.VISUAL_LIFE = 1` s then vanishes. Health/buff pickups auto-collect within 1.4 u. 15% health roll per kill. Leaderboard scores orbs only.
+Drop-on-kill: Skeleton 1, Magician 1, Armored 2, Archer 1, Rat 0, Brute 3, Wraith 2, BURN 2, elites base+1. Orbs credit INSTANTLY on drop (`collectedOrbs++` — the single souls counter); the orb visual bobs ~`DROP.VISUAL_LIFE = 1` s then vanishes. Health/buff pickups auto-collect within 1.4 u. 15% health roll per kill. Leaderboard scores souls only.
 
 ---
 
@@ -547,7 +546,7 @@ Drop-on-kill: Skeleton 1, Magician 1, Armored 2, Archer 1, Rat 0, Brute 3, Wrait
 
 Every 7th level; one boss at the exit cell (portal closed until it dies).
 
-- **HP**: `ceil(4 × BOSS.HP_MULT 22.5)` = **90** (15x +50%), scaled by the player's wealth: +25% per 50 souls held (`ceil(90 × (1 + 0.25·floor(souls/50)))` — 100 souls → 135, 300 souls → 225), then NG+ scaling.
+- **HP**: `ceil(4 × BOSS.HP_MULT 22.5)` = **90** (15x +50%), scaled by the player's wealth: +25% per 50 souls held (`ceil(90 × (1 + 0.25·floor(souls/50)))` — 100 souls → 135, 300 souls → 225), then NG+ scaling (doubled effects: base × (1 + 2·ngPlus)).
 - **Health bar**: a canvas sprite hovers above the boss showing current HP (red bar, drawn each frame; fades out with the death dissipation).
 - **Variant**: one of 7 (Skeleton, Armored, Archer, Brute, Wraith, Rat, Magician) — different look/scale/label, identical AI. Labels: BONE LORD / IRON GHOUL / SPECTRAL HUNTER / ASH TITAN / SPECTRAL LORD / VERMIN KING / LICH ARCHMAGE.
 - **AI** (states CHASE/CHARGING/DEAD):
@@ -570,7 +569,7 @@ Rises once the ENTIRE level is cleared (no living non-boss enemies, spawn queue 
 
 ## 19. Economy & pickups
 
-- **Orbs**: only from kills/breakables (drop-on-kill); none placed on the map. Credited INSTANTLY on drop: `collectedOrbs++` AND `soulsEarned++` — no pickup needed. The orb visual stays ~`DROP.VISUAL_LIFE = 1` s as feedback, then vanishes. `totalOrbs` (per-level count) unused for scoring.
+- **Orbs**: only from kills/breakables (drop-on-kill); none placed on the map. Credited INSTANTLY on drop: `collectedOrbs++` — the ONE souls counter (orbs ARE souls; no separate lifetime notion). The orb visual stays ~`DROP.VISUAL_LIFE = 1` s as feedback, then vanishes. `totalOrbs` (per-level count) unused for scoring.
 - **Health pickups**: 15% per kill; +3 hearts (capped at max).
 - **Buff pickups**: from broken breakables (6% + excess-orb bonus) — see §11. Boss kills grant directly.
 - **Breakables** (barrels/crates): HP 1, any damage source breaks (sword arc, orb hit, stepping on them); no orb drops; 6% buff roll per break (+0.05%/orb above 100); debris + smoke; ≤ 3/room. Sarcophagi (interactive): lid opens on first proximity (< 2.5 u), 30% chance to spawn a Wraith, guaranteed 1 orb, one-time.
@@ -584,7 +583,7 @@ Rises once the ENTIRE level is cleared (no living non-boss enemies, spawn queue 
 | Level | move speed ×(1 + 0.05(level−1)); attack speed ×(1 + 0.05·floor((level−1)/3)); **mob HP ×(1 + 0.1·floor(level/5))**; spawn slots +1/level (×spawnMult, cap 16); **spawnMult = 1 + (level + souls)/10** (level AND souls both accelerate spawns) |
 | Held orbs | sword scale +20%/10 orbs (cap ×4 at 150); orb damage +2%/orb; orbs > 100 add buff-drop chance |
 | Boss kills | +10% mob move AND attack speed each (permanent, multiplicative) |
-| NG+ | enemy HP ×(1 + ngPlus) (× level-HP bonus above); run restarts at floor(level/2) keeping 90% of orbs |
+| NG+ | enemy HP ×(1 + 2·ngPlus) — NG+ effects doubled (× level-HP bonus above); run restarts at floor(level/2) keeping 90% of souls (flat toll) + the weapon tier |
 | Timer | 180 s/level, ends the run |
 
 ---
@@ -593,9 +592,8 @@ Rises once the ENTIRE level is cleared (no living non-boss enemies, spawn queue 
 
 | Element | State it renders |
 |---|---|
-| ORBS counter | `collectedOrbs` |
+| SOULS counter (top-right) | `collectedOrbs` — the ONE souls/ammo counter (orbs = souls; no separate lifetime line) |
 | Power suffix | sword scale (+% power) |
-| Souls line | `soulsEarned` — TOTAL ONLY, no tier/progress (form + toast convey the tier) |
 | HP bar + number | `health` / `maxHealth` |
 | Level title | `LEVEL n · NG+k — <biome label>` |
 | Timer | `180 − levelTime` (m:ss; red under 30 s; NG+ suffix) |
@@ -657,9 +655,9 @@ Headless Node scripts (no browser except the smoke test). The scripts stub `docu
 
 **biome-check** (11 gates): sequence = 10 biomes; palettes have all 9 keys; the 5 new biomes' palette VALUES match the spec verbatim; spawn-weight columns sum to exactly 100 with 7 entries; every biome has a `BIOME_ROOM_MODIFIERS` entry; eligibility resolves (FLOODED_RUINS exempt from the themed-room rule) and every room type appears somewhere; per-biome eligible room weight ≥ 100; every room type has `PROPS.PROPS_PER_ROOM`; referenced light sources exist; TEMPLE modifier = {ARMORED 1.2}; light probe (default 10 seeds, arg-configurable) — every biome avg ≤ 154 / max ≤ 199, vaultOnly torch avg ≤ 10 / max ≤ 50.
 
-**weapon-check** (12 gates): EVOLUTION block complete + finite; tier math (0/99/100/199/200/500/999 → 0/0/1/1/2/5/5); damage ladder 2/2/3→7/7/8 + brute breakpoint (HP 8 dies in 2 hits at tier 5, armored 5 dies in 1 at tier 3); arc table (lengths = MAX_TIER+1, T5 = 1.0/2, pool ≥ 6); ELECTRIC_CHANCE/RANGE finite + referenced in Game; blade length monotonic 0.76→1.0, TIP_LOCAL = length × 0.79, scale clamp ≥ 4; HUD `#souls-line` default exactly `Souls 0` and NO `#tier-pips`; six per-tier form builders + `_formMeshes` registry present; no Torus/TorusKnot geometry in PlayerSword; Game.js writes total-only souls; dungeon-check 0/40.
+**weapon-check** (12 gates): EVOLUTION block complete + finite; tier math (0/99/100/199/200/500/999 → 0/0/1/1/2/5/5); damage ladder 2/2/3→7/7/8 + brute breakpoint (HP 8 dies in 2 hits at tier 5, armored 5 dies in 1 at tier 3); arc table (lengths = MAX_TIER+1, T5 = 1.0/2, pool ≥ 6); ELECTRIC_CHANCE/RANGE finite + referenced in Game; blade length monotonic 0.76→1.0, TIP_LOCAL = length × 0.79, scale clamp ≥ 4; HUD single SOULS counter (no `#souls-line`, no `#tier-pips`) + all 6 tier icons present; Game.js free of `soulsEarned`; six per-tier form builders + `_formMeshes` registry present; no Torus/TorusKnot geometry in PlayerSword; Game.js writes the single souls counter; dungeon-check 0/40.
 
-**browser smoke** (headless Chromium via raw CDP, Node WebSocket): boot the game against the dev server; wait for level build; assert canvas + WebGL2; HUD ids present (`#orb-count`, `#souls-line`, `#perf-warning`, `#biome-label`, `#timer`, `#hp-fill`, `#combo-pips`, `#weapon-slot`, `#stats-panel`); `#souls-line` = `Souls 0`; `#perf-warning` hidden; loading screen passed; timer advances; **zero JS exceptions**.
+**browser smoke** (headless Chromium via raw CDP, Node WebSocket): boot the game against the dev server; wait for level build; assert canvas + WebGL2; HUD ids present (`#orb-count`, `#perf-warning`, `#biome-label`, `#timer`, `#hp-fill`, `#combo-pips`, `#weapon-slot`, `#stats-panel`); single souls label `SOULS`; `#perf-warning` hidden; loading screen passed; timer advances; **zero JS exceptions**.
 
 In-game invariants: memory stable over 3 descends (no leaks — teardown contract §14); camera + sword survive regens; `window.game` exposed for QA.
 
