@@ -99,7 +99,7 @@ src/
   entities/
     PlayerSword.js          First-person weapon: combo state machine, per-tier forms (§9), trails,
                             sparks, smoke, danger/growth lights, evolution forms
-    OrbSystem.js            Drop-only orb economy: shared-pool drops, auto-collect, health/buff
+    OrbSystem.js            Drop-only orb economy: instant-credit orbs (1 s visual), health/buff
                             pickups, pickup rings, death bursts
     OrbShooter.js           Orb weapon: pooled projectiles (48 + 10 fireball slots), sequence logic,
                             bounces, explosions, fireball variant
@@ -539,7 +539,7 @@ Per level (non-boss): compute slots and build a spawn PLAN (cheap data) then rev
 | Wraith | 0 | 30 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 ### 16.5 Drops & score
-Drop-on-kill: Skeleton 1, Magician 1, Armored 2, Archer 1, Rat 0, Brute 3, Wraith 2, BURN 2, elites base+1. Drops at y 0.8, ±0.4 jitter, bob, auto-collect within 1.4 u. 15% full-heal roll per kill. Leaderboard scores orbs only.
+Drop-on-kill: Skeleton 1, Magician 1, Armored 2, Archer 1, Rat 0, Brute 3, Wraith 2, BURN 2, elites base+1. Orbs credit INSTANTLY on drop (`collectedOrbs++` AND `soulsEarned++`); the orb visual bobs ~`DROP.VISUAL_LIFE = 1` s then vanishes. Health/buff pickups auto-collect within 1.4 u. 15% health roll per kill. Leaderboard scores orbs only.
 
 ---
 
@@ -570,7 +570,7 @@ Rises once the ENTIRE level is cleared (no living non-boss enemies, spawn queue 
 
 ## 19. Economy & pickups
 
-- **Orbs**: only from kills (drop-on-kill); none placed on the map. Auto-collect within 1.4 u. Pickup: `collectedOrbs++` AND `soulsEarned++`. `totalOrbs` (per-level count) unused for scoring.
+- **Orbs**: only from kills/breakables (drop-on-kill); none placed on the map. Credited INSTANTLY on drop: `collectedOrbs++` AND `soulsEarned++` — no pickup needed. The orb visual stays ~`DROP.VISUAL_LIFE = 1` s as feedback, then vanishes. `totalOrbs` (per-level count) unused for scoring.
 - **Health pickups**: 15% per kill; +3 hearts (capped at max).
 - **Buff pickups**: from broken breakables (6% + excess-orb bonus) — see §11. Boss kills grant directly.
 - **Breakables** (barrels/crates): HP 1, any damage source breaks (sword arc, orb hit, stepping on them); no orb drops; 6% buff roll per break (+0.05%/orb above 100); debris + smoke; ≤ 3/room. Sarcophagi (interactive): lid opens on first proximity (< 2.5 u), 30% chance to spawn a Wraith, guaranteed 1 orb, one-time.
