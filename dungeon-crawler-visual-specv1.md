@@ -327,7 +327,7 @@ Plus, outside the entry: `ENEMY_SPAWN_WEIGHTS[id]` (7 numbers, sum 100), `BIOME_
 ### 8.2 Health
 - Max health 3, +1 permanent heart per boss kill.
 - Damage: any hit sets `invulnTimer = 0.8 s`; damage ignored while invulnerable. Hit → damage flash + shake (0.25 s) + regen clock reset.
-- **Passive regen**: after 20 s without a hit, +1 heart every 5 s, capped at max.
+- **Passive regen**: starts immediately (no delay — `REGEN_DELAY = 0`), +1 heart every 5 s, capped at max.
 - **Health pickups**: 15% per kill; full heal on pickup.
 
 ---
@@ -382,8 +382,8 @@ One collected orb = ONE 3-step sequence; ONE click = ONE step (each aimed at the
 
 - **Sequence**: steps 1–2 are normal orbs (bounce up to 3 times off floor/ceiling/walls, reflecting off the dominant axis, then fizzle on the next surface contact); step 3 is explosive and detonates on its FIRST contact with anything (floor, ceiling, wall, prop, enemy, or life end).
 - **Ammo**: only the FIRST step of a NEW sequence costs 1 orb; steps 2–3 of an open sequence are free. 0 orbs → "No orbs!" message. Hold LMB steps every `STEP_INTERVAL = 0.22 s`. Sequence expires after `SEQUENCE_WINDOW = 1.2 s` without a step.
-- **Projectile**: speed 12.4 u/s, lifetime 2.5 s, radius 0.3; direct-hit damage = `round(1 × orbDamageMultiplier(orbs))`, `orbDamageMultiplier = 1 + 0.02 × orbs`.
-- **Explosion** (step 3): AOE `round(1 × orbDamageMultiplier)` to every enemy within `EXPLODE_RADIUS = 1.5` u (only if blast y < 2.6).
+- **Projectile**: speed 12.4 u/s, lifetime 2.5 s, radius 0.3; direct-hit damage = `round(2 × orbDamageMultiplier(orbs))`, `orbDamageMultiplier = 1 + 0.02 × orbs` (base damage 2, doubled from 1).
+- **Explosion** (step 3): AOE `round(2 × orbDamageMultiplier)` to every enemy within `EXPLODE_RADIUS = 1.5` u (only if blast y < 2.6).
 - **Breakables**: orb hits break breakables (and continue). Enemy projectiles are NOT broken by orbs (sword only).
 - Pooled (48 normal + 10 fireball slots), zero per-shot allocation.
 
@@ -543,7 +543,8 @@ Drop-on-kill: Skeleton 1, Magician 1, Armored 2, Archer 1, Rat 0, Brute 3, Wrait
 
 Every 7th level; one boss at the exit cell (portal closed until it dies).
 
-- **HP**: `ceil(4 × BOSS.HP_MULT 30)` = **120**, then NG+ scaling.
+- **HP**: `ceil(4 × BOSS.HP_MULT 15)` = **60** (halved from 120), then NG+ scaling.
+- **Health bar**: a canvas sprite hovers above the boss showing current HP (red bar, drawn each frame; fades out with the death dissipation).
 - **Variant**: one of 7 (Skeleton, Armored, Archer, Brute, Wraith, Rat, Magician) — different look/scale/label, identical AI. Labels: BONE LORD / IRON GHOUL / SPECTRAL HUNTER / ASH TITAN / SPECTRAL LORD / VERMIN KING / LICH ARCHMAGE.
 - **AI** (states CHASE/CHARGING/DEAD):
   - Drift toward player at 2.2 u/s beyond 2.5 u.
