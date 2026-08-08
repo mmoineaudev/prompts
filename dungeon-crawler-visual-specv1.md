@@ -31,7 +31,7 @@ All binds use `event.code` (physical key position, not layout label) — this ma
 | Move back | `KeyS` | hold | |
 | Strafe left | `KeyA` (Q on AZERTY) | hold | |
 | Strafe right | `KeyD` | hold | |
-| Sprint | `ShiftLeft` / `ShiftRight` | hold | ×1.55 speed, FOV kick, +5%/5s acceleration tier |
+| Sprint | `ShiftLeft` / `ShiftRight` | hold | ×1.55 speed, FOV kick, +5%/s acceleration tier |
 | Look | mouse | pointer-locked | sensitivity 0.002 rad/px, pitch clamp ±85° |
 | Fire orb | Mouse 0 (LMB) | hold | one click = one step of the 3-step sequence; hold keeps stepping at 0.22 s |
 | Sword attack | Mouse 2 (RMB) | edge press | 3-hit combo; press again inside the 0.34 s window to chain |
@@ -54,7 +54,7 @@ Input handling: `InputSystem` stores key/mouse state from `window` listeners (`k
 - **Boss cadence**: every 7th level (`BOSS.INTERVAL = 7`) is a single-boss arena: levels 7, 14, 21, 28… The boss biome (SPECTRAL_COURT) overrides the normal biome ladder on those levels.
 - **Timed run**: `TIMED_RUN.LEVEL_TIME_LIMIT = 180` seconds per level. `levelTime` counts up while playing; at 180 s the run ends (reason "time"). The run timer does not tick while the title screen holds the scene, and starts fresh after it lifts (so loading lag never counts).
 - **Death**: any lethal damage ends the run (reason "dead"). On death, the run is submitted to the leaderboard and the death screen offers **Restart [N]** (fresh run, level 1, everything reset), **New Game+ [Y]**, or **Save for later [S]**:
-  - NG+ starts at `max(1, floor(level / 2))`, keeps `floor(bankedOrbs * 0.9)` orbs, increments `ngPlus`, and keeps `bossKills`. Mobs get +100% HP per NG+ cycle (`enemyHpMultiplier = 1 + ngPlus`).
+  - NG+ starts at `max(1, floor(level / 2))`, keeps `floor(bankedOrbs * 0.9)` orbs, increments `ngPlus`, and keeps `bossKills`. Mobs get +100% HP per NG+ cycle AND +10% bonus HP every 5 levels (`enemyHpMultiplier = (1 + ngPlus) × (1 + 0.1·floor(level/5))`).
   - A fresh restart: level 1, 0 orbs, ngPlus 0, bossKills 0, max health 3.
   - **Save [S]** writes the run to localStorage (`dungeonCrawlerSave`) AND mirrors it to a file on disk via the companion save-server (`scripts/save-server.mjs`, port 5174, started by `launch.sh`): level, runTime, orbs, souls, weapon tier, permanent hearts, NG+ cycle, boss kills, plus the just-recorded death entry.
 - **Startup**: if a save exists, a menu offers **Load last save [L]** (shows level + souls) or **New Game [N]**. Loading restarts the SAVED LEVEL from the beginning — fresh level, full health, spawn protection — with ALL meta-progression intact: orbs (no 10% penalty), souls, weapon tier, permanent hearts, NG+ cycle unchanged, boss kills kept. The save is NOT consumed by loading: it persists until a new death-save overwrites it, so the Load option never disappears. At startup the game prefers the local copy and falls back to the file-backed server copy (survives browser storage wipes, private windows, and localhost-vs-LAN origin switches between server runs). The stale death entry is removed from the ledger (the run didn't end there). A buff never carries across a save-load.
@@ -324,7 +324,7 @@ Plus, outside the entry: `ENEMY_SPAWN_WEIGHTS[id]` (7 numbers, sum 100), `BIOME_
 
 ### 8.1 Movement
 - Base speed 4 u/s; sprint ×1.55 (FOV +8 while sprinting).
-- **Sprint acceleration**: holding Shift + moving for `SPRINT_ACCEL_WINDOW = 5` consecutive seconds grants `SPRINT_ACCEL_STEP = +5%` sprint speed per tier, cumulative, stacking multiplicatively on the 1.55 base; resets to 0 the moment sprinting stops (or during safe spawn).
+- **Sprint acceleration**: holding Shift + moving for `SPRINT_ACCEL_WINDOW = 1` consecutive second grants `SPRINT_ACCEL_STEP = +5%` sprint speed per tier, cumulative, stacking multiplicatively on the 1.55 base; resets to 0 the moment sprinting stops (or during safe spawn).
 - Sub-stepped movement + circle collision (§6). Camera: pointer-locked, pitch clamp ±85°, sensitivity 0.002.
 - **Safe spawn**: 5 s rooted + invincible at level start, with visible countdown; mobs don't track or attack during it.
 
@@ -389,7 +389,7 @@ One collected orb = ONE 3-step sequence; ONE click = ONE step (each aimed at the
 - **Projectile**: speed 12.4 u/s, lifetime 2.5 s, radius 0.3; direct-hit damage = `round(2 × orbDamageMultiplier(orbs))`, `orbDamageMultiplier = 1 + 0.02 × orbs` (base damage 2, doubled from 1).
 - **Explosion** (step 3): AOE `round(2 × orbDamageMultiplier)` to every enemy within `EXPLODE_RADIUS = 1.5` u (only if blast y < 2.6).
 - **Breakables**: orb hits break breakables (and continue). Enemy projectiles are NOT broken by orbs (sword only).
-- Pooled (48 normal + 10 fireball slots), zero per-shot allocation.
+- Pooled (48 normal + 6 fireball slots), zero per-shot allocation. Fireball slots carry NO shot-trace smear sprite and use reduced emissive (2.2) + shorter explosion rings (0.22 s) — the FIREBALL buff was the laggiest one, these cuts keep it cheap while held-spamming.
 
 **Fireball (FIREBALL buff)**: RMB hurls a free fiery projectile exploding on first contact (same explosion rules, no ammo cost, `FIREBALL_COOLDOWN = 0.35 s` while held). The sword is hidden while active.
 
@@ -547,7 +547,7 @@ Drop-on-kill: Skeleton 1, Magician 1, Armored 2, Archer 1, Rat 0, Brute 3, Wrait
 
 Every 7th level; one boss at the exit cell (portal closed until it dies).
 
-- **HP**: `ceil(4 × BOSS.HP_MULT 22.5)` = **90** (15x +50%), then NG+ scaling.
+- **HP**: `ceil(4 × BOSS.HP_MULT 22.5)` = **90** (15x +50%), scaled by the player's wealth: +25% per 50 souls held (`ceil(90 × (1 + 0.25·floor(souls/50)))` — 100 souls → 135, 300 souls → 225), then NG+ scaling.
 - **Health bar**: a canvas sprite hovers above the boss showing current HP (red bar, drawn each frame; fades out with the death dissipation).
 - **Variant**: one of 7 (Skeleton, Armored, Archer, Brute, Wraith, Rat, Magician) — different look/scale/label, identical AI. Labels: BONE LORD / IRON GHOUL / SPECTRAL HUNTER / ASH TITAN / SPECTRAL LORD / VERMIN KING / LICH ARCHMAGE.
 - **AI** (states CHASE/CHARGING/DEAD):
@@ -581,10 +581,10 @@ Rises once the ENTIRE level is cleared (no living non-boss enemies, spawn queue 
 
 | Source | Effect |
 |---|---|
-| Level | move speed ×(1 + 0.05(level−1)); attack speed ×(1 + 0.05·floor((level−1)/3)); spawn slots +1/level (×spawnMult, cap 16); spawnMult ×1.1^(level−1) |
-| Held orbs | sword scale +20%/10 orbs (cap ×4 at 150); orb damage +2%/orb; spawn multiplier ×orbPower; orbs > 100 add +1 spawn multiplier per 100 and buff-drop chance |
+| Level | move speed ×(1 + 0.05(level−1)); attack speed ×(1 + 0.05·floor((level−1)/3)); **mob HP ×(1 + 0.1·floor(level/5))**; spawn slots +1/level (×spawnMult, cap 16); spawnMult ×1.1^(level−1) |
+| Held orbs | sword scale +20%/10 orbs (cap ×4 at 150); orb damage +2%/orb; spawn multiplier ×orbPower; orbs > 100 add +1 spawn multiplier per 100 and buff-drop chance; **+5% spawn rate per 50 souls** |
 | Boss kills | +10% mob move AND attack speed each (permanent, multiplicative) |
-| NG+ | enemy HP ×(1 + ngPlus); run restarts at floor(level/2) keeping 90% of orbs |
+| NG+ | enemy HP ×(1 + ngPlus) (× level-HP bonus above); run restarts at floor(level/2) keeping 90% of orbs |
 | Timer | 180 s/level, ends the run |
 
 ---
