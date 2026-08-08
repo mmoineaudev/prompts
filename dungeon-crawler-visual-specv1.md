@@ -597,7 +597,7 @@ Rises once the ENTIRE level is cleared (no living non-boss enemies, spawn queue 
 |---|---|
 | SOULS counter (top-right) | `collectedOrbs` — the ONE souls/ammo counter (orbs = souls; no separate lifetime line) |
 | Power suffix | sword scale (+% power) |
-| Danger glow | 4 screen borders, red edge gradient — front → top, behind → bottom, right → right, left → left; alpha = min(1, Σ(1/d)/2) over living enemies within 40 m of that sector (additive, no nearest-enemy computation) |
+| Danger glow | 4 screen borders, red edge gradient — in FRONT → bottom, behind → top, right → right, left → left; alpha = min(1, Σ(1/d)/2) over living enemies within 40 m of that sector (additive, no nearest-enemy computation) |
 | HP bar + number | `health` / `maxHealth` |
 | Level title | `LEVEL n · NG+k — <biome label>` |
 | Timer | `180 − levelTime` (m:ss; red under 30 s; NG+ suffix) |
