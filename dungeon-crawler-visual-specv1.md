@@ -54,7 +54,7 @@ Input handling: `InputSystem` stores key/mouse state from `window` listeners (`k
 - **Boss cadence**: every 7th level (`BOSS.INTERVAL = 7`) is a single-boss arena: levels 7, 14, 21, 28… The boss biome (SPECTRAL_COURT) overrides the normal biome ladder on those levels.
 - **Timed run**: `TIMED_RUN.LEVEL_TIME_LIMIT = 180` seconds per level. `levelTime` counts up while playing; at 180 s the run ends (reason "time"). The run timer does not tick while the title screen holds the scene, and starts fresh after it lifts (so loading lag never counts).
 - **Death**: any lethal damage ends the run (reason "dead"). On death, the run is submitted to the leaderboard and the death screen offers **Restart [N]** (fresh run, level 1, everything reset), **New Game+ [Y]**, or **Save for later [S]**:
-  - NG+ starts at `max(1, floor(level / 2))`, keeps `floor(souls × 0.9)` (a flat 10% toll on the ONE souls counter — never a reset), increments `ngPlus`, keeps `bossKills`, and KEEPS the weapon tier (the ladder never downgrades). Mobs get **+200% HP per NG+ cycle (effects doubled)** AND +10% bonus HP every 5 levels (`enemyHpMultiplier = (1 + 2·ngPlus) × (1 + 0.1·floor(level/5))`).
+  - NG+ starts at `max(1, floor(level / 2))`, keeps `floor(souls × 0.9)` (a flat 10% toll on the ONE souls counter — never a reset), increments `ngPlus`, keeps `bossKills`, and KEEPS the weapon tier (the ladder never downgrades). Mobs get **+300% HP per NG+ cycle** (100% base + the doubled-effect ruling +200% + an additional +100%) AND **+100% bonus HP every 10 levels**; spawn pressure ABOVE the ×100 spawn cap converts to HP at +100% per 10 excess points (`enemyHpMultiplier = (1 + 3·ngPlus) × (1 + floor(level/10) + floor(max(0, level+souls−990)/10))`).
   - A fresh restart: level 1, 0 orbs, ngPlus 0, bossKills 0, max health 3.
   - **Save [S]** writes the run to localStorage (`dungeonCrawlerSave`) AND mirrors it to a file on disk via the companion save-server (`scripts/save-server.mjs`, port 5174, started by `launch.sh`): level, runTime, souls (the single orbs/souls counter), weapon tier, permanent hearts, NG+ cycle, boss kills, plus the just-recorded death entry.
 - **Startup**: a TITLE SCREEN always shows first — a living spectral-court showcase scene (golden exit portal, hovering soul orbs, an idling Spectral Lord, cold pillar flames) with the game's name in huge type. The menu offers **Load last save [L]** (only when a save exists) and **New Game [N]**. Loading restarts the SAVED LEVEL from the beginning — fresh level, full health, spawn protection — with ALL meta-progression intact: souls (single counter, no 10% penalty on load), weapon tier, permanent hearts, NG+ cycle unchanged, boss kills kept. The save is NOT consumed by loading: it persists until a new death-save overwrites it, so the Load option never disappears. At startup the game prefers the local copy and falls back to the file-backed server copy (survives browser storage wipes, private windows, and localhost-vs-LAN origin switches between server runs). The stale death entry is removed from the ledger (the run didn't end there). A buff never carries across a save-load.
@@ -486,7 +486,7 @@ Pipeline order (binding structure; the exact pass parameters are "~5% of the old
 ### 16.1 Spawn system
 Per level (non-boss): compute slots and build a spawn PLAN (cheap data) then reveal one mob every `SPAWN_INTERVAL = 0.5 s` (first reveals immediately) so construction is spread out. A queued spawn within 30 m of the player is deferred (rotates to the back of the queue). While the title screen holds, spawns still drain but mobs are frozen (`frozen` flag); during safe spawn they idle. Mobs > 40 m from the player are frozen immobile (`FROZEN_DIST`).
 
-- **Slots**: `min(round((2 + (level − 1)) × spawnMult), MAX_ALIVE 200)`; +2 if an ARENA is present. `spawnMult = 1 + (level + souls)/10` (level AND banked souls both accelerate spawns). **Spawns only occur more than 30 m from the player** (`SPAWN_PLAYER_DIST`): a queued spawn whose spot is too close rotates to the back of the queue until the player moves away — nothing materializes next to you.
+- **Slots**: `min(round((2 + (level − 1)) × spawnMult), MAX_ALIVE 200)`; +2 if an ARENA is present. `spawnMult = min(1 + (level + souls)/10, ×100)` — level AND banked souls accelerate spawns, CAPPED at ×100 (`SPAWN_CAP`); past the cap, pressure feeds enemy HP at +100% per 10 excess points (the overflow rule). **Spawns only occur more than 30 m from the player** (`SPAWN_PLAYER_DIST`): a queued spawn whose spot is too close rotates to the back of the queue until the player moves away — nothing materializes next to you.
 - **Candidate cells**: non-empty cells at BFS distance ≥ 6 from the entrance, EXCLUDING the exit room; shuffled.
 - **Far-frozen bodies**: mobs more than 40 m from the player are IMMOBILE (`FROZEN_DIST` — idle in place, no AI/tracking/attacks), which makes the 200-body cap affordable (distant mobs cost almost nothing per frame).
 - **Type pick**: biome weight column × room-enemy modifiers, weighted sample.
@@ -526,7 +526,7 @@ Per level (non-boss): compute slots and build a spawn PLAN (cheap data) then rev
 | Armored | Warlord | 10 | ×1.3 | 3 | |
 | Archer | Sharpshooter | 2 | — | 2 | 2-arrow fan (±8°) |
 | Brute | Ogre | 16 | ×1.2 | 4 | scale ×1.9 |
-| Wraith | Banshee | 4 | ×1.4 | 3 | |
+| Wraith | Banshee | 4 | ×1.4 | 3 | long-range soul orb cast |
 
 ### 16.4 Spawn weights per biome (sum 100; Skeleton, Magician, Armored, Archer, Rat, Brute, Wraith)
 
@@ -549,12 +549,13 @@ Drop-on-kill: Skeleton 1, Magician 1, Armored 2, Archer 1, Rat 0, Brute 3, Wrait
 
 Every 7th level; one boss at the exit cell (portal closed until it dies).
 
-- **HP**: `ceil(4 × BOSS.HP_MULT 22.5)` = **90** (15x +50%), scaled by the player's wealth: +25% per 50 souls held (`ceil(90 × (1 + 0.25·floor(souls/50)))` — 100 souls → 135, 300 souls → 225), then NG+ scaling (doubled effects: base × (1 + 2·ngPlus)).
+- **HP**: `ceil(4 × BOSS.HP_MULT 22.5)` = **90** (15x +50%), scaled by the player's wealth: +25% per 50 souls held (`ceil(90 × (1 + 0.25·floor(souls/50)))` — 100 souls → 135, 300 souls → 225), then NG+ scaling (base × (1 + 3·ngPlus)).
 - **Health bar**: a canvas sprite hovers above the boss showing current HP (red bar, drawn each frame; fades out with the death dissipation).
 - **Variant**: one of 7 (Skeleton, Armored, Archer, Brute, Wraith, Rat, Magician) — different look/scale/label, identical AI. Labels: BONE LORD / IRON GHOUL / SPECTRAL HUNTER / ASH TITAN / SPECTRAL LORD / VERMIN KING / LICH ARCHMAGE.
 - **AI** (states CHASE/CHARGING/DEAD):
   - Drift toward player at 2.2 u/s beyond 2.5 u.
   - **Charge**: off cooldown and within 14 u → telegraph → dash at 14 u/s for 0.9 s along a locked direction; contact within 1.4 u deals 1 (once per charge); cooldown 3.2 s (first charge at ×0.6). Collision radius 0.9.
+  - **Orb volley**: every **random 1–3 s interval** (`BOSS.ORB_MIN/ORB_MAX`), hurls a soul orb toward the player (9 u/s, damage 1 — same pooled spectral-orb projectile as the wraiths, breakable by the sword swing).
   - **Summon**: every 6 s, up to 3 projectile-firing wraiths at random candidate cells, cap 6 living summoned wraiths.
 - **Defeat**: `bossKills++`, 5-minute uncapped buff, +1 permanent max heart (+1 heal), portal opens, message. Boss bar during the fight (green → amber → red at 50%/25%).
 
@@ -583,10 +584,10 @@ Rises once the ENTIRE level is cleared (no living non-boss enemies, spawn queue 
 
 | Source | Effect |
 |---|---|
-| Level | move speed ×(1 + 0.05(level−1)); attack speed ×(1 + 0.05·floor((level−1)/3)); **mob HP ×(1 + 0.1·floor(level/5))**; spawn slots +1/level (×spawnMult, cap 200); **spawnMult = 1 + (level + souls)/10** (level AND souls both accelerate spawns) |
+| Level | move speed ×(1 + 0.05(level−1)); attack speed ×(1 + 0.05·floor((level−1)/3)); **mob HP ×(1 + floor(level/10))**; spawn slots +1/level (×spawnMult, cap 200); **spawnMult = min(1 + (level + souls)/10, ×100)**; past ×100, pressure feeds HP (+100%/10 excess) |
 | Held orbs | sword scale +20%/10 orbs (cap ×4 at 150); orb damage +2%/orb; orbs > 100 add buff-drop chance |
 | Boss kills | +10% mob move AND attack speed each (permanent, multiplicative) |
-| NG+ | enemy HP ×(1 + 2·ngPlus) — NG+ effects doubled (× level-HP bonus above); run restarts at floor(level/2) keeping 90% of souls (flat toll) + the weapon tier |
+| NG+ | enemy HP ×(1 + 3·ngPlus) — 100% base + doubled-effect +100% additional (× level/overflow HP bonus above); run restarts at floor(level/2) keeping 90% of souls (flat toll) + the weapon tier |
 | Timer | 180 s/level, ends the run |
 
 ---
