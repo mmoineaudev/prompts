@@ -309,7 +309,7 @@ Plus, outside the entry: `ENEMY_SPAWN_WEIGHTS[id]` (7 numbers, sum 100), `BIOME_
 - **Braziers**: one lit brazier per room of `brazierRooms` — `['HALL']` for every biome except GOLDEN_TEMPLE (`['HALL','TEMPLE']`).
 - **Hazards**: lava pools (1–2/room) in VOLCANIC_DEPTHS and EMBER_FORGE (identical lava rules); acid pools (1–2/room) in POISON_SWAMP. Both: within 1.2 u of pool center → 1 damage per 0.8 s tick (i-frames respected). Pools never within 3 u of the exit marker.
 - **Wisps**: 1–2 per CRYPT room in HAUNTED_CRYPT; exactly 1 per room (aqua) in FLOODED_RUINS. Patrol radius 2 u at y 1.2 around the room center, bounce at room bounds.
-- **Mushrooms**: 3 clusters per MUSHROOM_GROVE, 1 per other room in FUNGAL_CAVERN; toxic variant in POISON_SWAMP (same rules).
+- **Mushrooms**: ~6 clusters per MUSHROOM_GROVE, ~2 per other room in FUNGAL_CAVERN (weight-5 pool); toxic variant in POISON_SWAMP (weight 4). Each cluster emits a green point light (`LIGHT_SOURCES.MUSHROOM`: 3.2, dist 12, decay 1.2, no shadow) — the torchless caverns are lit by their own glow.
 - **Crystal lamps**: 1 cluster per room in CRYSTAL_DEPTHS; 2 clusters per room in FROZEN_HALLS.
 - **Spawn weights**: per-biome enemy mix (§16.4). Wraiths are crypt-exclusive (weight 0 elsewhere). Brutes peak in EMBER_FORGE (35) — the last rung of the cycle is the danger rung.
 - **Light budget invariant** (§22): every biome's per-level point-light count must stay ≤ the heaviest existing biome (avg 154 / max 199 measured), verified by the probe.
@@ -507,7 +507,7 @@ Per level (non-boss): compute slots and build a spawn PLAN (cheap data) then rev
 |---|---|---|---|---|---|---|---|
 | Skeleton | 2 | 2.6 | 1 | 1.6 | 0.35/0.25/0.4/1.2 | melee, no elite | 1 |
 | Magician | 2 | 2.6 | 1 | cast 9 | same cycle | red orb 6.2 u/s, life 4, radius 0.3, 1 dmg; stops at 0.6×cast range; no elite | 1 |
-| Armored Skeleton | 5 | 1.8 | 2 | 1.7 | 0.5/0.3/0.5/1.6 | tank; no block (armor = HP) | 2 |
+| Armored Skeleton | 5 | 1.8 | 2 | 0.85 (÷2 from 1.7) | 0.5/0.3/0.5/1.6 | tank; no block (armor = HP) | 2 |
 | Archer Skeleton | 2 | 2.4 | 1 | 10 | 0.5/0.1/0.4/1.8 | kites (stop 8 u, retreat under 4 u at 2.0 u/s); arrow 8 u/s, life 3, radius 0.15; needs LOS | 1 |
 | Rat (pack) | 1 | 4.2 | 1 | 0.9 | instant/0.8 | packs 2–3; straight chase (greedy when blocked); no elite; 0 drops | 0 |
 | Brute | 8 | 1.2 | 3 | 2.4 | 1.2/0.3/1.2/2.5 | slam ±50° cone (0.87 rad), damage 3 (one-shot); slow | 3 |
