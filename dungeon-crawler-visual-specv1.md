@@ -133,7 +133,7 @@ docs/                       (specs/history — not needed to build)
 
 `Game.init()` order (binding):
 1. `_initRenderer()` — WebGLRenderer, antialias, ACESFilmic tone mapping exposure 1.0, PCFSoft shadow map, sRGB output, pixel ratio `min(devicePixelRatio, 2)`, resize listener.
-2. `_initCamera()` — PerspectiveCamera (FOV 75, near 0.1, far 160); `camera.layers.enable(2)`; creates the sword (camera child, layer 2), the headlight (camera child, layer 0, no shadow), and the held-fireball group (camera child).
+2. `_initCamera()` — PerspectiveCamera (FOV 90, near 0.1, far 160); `camera.layers.enable(2)`; creates the sword (camera child, layer 2), the headlight (camera child, layer 0, no shadow), and the held-fireball group (camera child).
 3. `_initPostProcessing()` — composer pipeline (§12); post ON by default.
 4. `_initInput()`.
 5. `biomes.applyLevel(level 1, state)` — resolves the first biome.
@@ -418,7 +418,7 @@ One buff at a time; picking a new one REPLACES the current, and the roll NEVER r
 
 ### 12.1 Renderer & scene
 - `WebGLRenderer({antialias: true})`; `toneMapping = ACESFilmicToneMapping`, exposure 1.0; `shadowMap = PCFSoftShadowMap`; `outputColorSpace = SRGBColorSpace`; `pixelRatio = min(devicePixelRatio, 2)`; resize handler.
-- Camera: FOV 75, near 0.1, far 160. `scene.background` = biome fog color; `scene.fog = FogExp2(fog, fogDensity)`.
+- Camera: FOV 90 (was 75 — +20% wider), near 0.1, far 160. `scene.background` = biome fog color; `scene.fog = FogExp2(fog, fogDensity)`.
 - **Camera layers (binding design)**: layer 0 = world + headlight; layer 1 = enemy-glow pass (enemy meshes opt-in via `setEnemyTargets`); layer 2 = first-person sword. The camera has layers 0+2 enabled. The headlight (layer 0, camera-attached, no shadow) therefore NEVER lights the sword — the sword is self-lit.
 - **Shadows**: only the 8 torches nearest the player cast shadows (`TORCH_SHADOW_COUNT = 8`), map 256², near 0.5, far 11, bias −0.005, normalBias 0.02; nearest-8 re-evaluated every 0.5 s. Every other light `castShadow = false` forever.
 
@@ -600,6 +600,7 @@ Rises once the ENTIRE level is cleared (no living non-boss enemies, spawn queue 
 | Level title | `LEVEL n · NG+k — <biome label>` |
 | Timer | `180 − levelTime` (m:ss; red under 30 s; NG+ suffix) |
 | Combo pips | `sword.comboStep` (0–3) |
+| Weapon slot | tier name + effect: `EVOLUTION.TIER_NAMES[weaponTier]` + `TIER n — TIER_EFFECTS[n]` (updates on tier change) |
 | Sprint bonus | `sprintSpeedMult` when > 1 |
 | Buff badge | `buffEffect` + `buffTime` (hidden when none) |
 | Safe-spawn | `safeSpawn` countdown |
