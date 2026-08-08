@@ -31,7 +31,7 @@ All binds use `event.code` (physical key position, not layout label) — this ma
 | Move back | `KeyS` | hold | |
 | Strafe left | `KeyA` (Q on AZERTY) | hold | |
 | Strafe right | `KeyD` | hold | |
-| Sprint | `ShiftLeft` / `ShiftRight` | hold | ×1.55 speed, FOV kick, +5%/s acceleration tier |
+| Sprint | `ShiftLeft` / `ShiftRight` | hold | ×1.55 speed, FOV kick, +5%/s acceleration tier (capped ×3) |
 | Look | mouse | pointer-locked | sensitivity 0.002 rad/px, pitch clamp ±85° |
 | Fire orb | Mouse 0 (LMB) | hold | one click = one step of the 3-step sequence; hold keeps stepping at 0.22 s |
 | Sword attack | Mouse 2 (RMB) | edge press | 3-hit combo; press again inside the 0.34 s window to chain |
@@ -325,7 +325,7 @@ Plus, outside the entry: `ENEMY_SPAWN_WEIGHTS[id]` (7 numbers, sum 100), `BIOME_
 
 ### 8.1 Movement
 - Base speed 4 u/s; sprint ×1.55 (FOV +8 while sprinting).
-- **Sprint acceleration**: holding Shift + moving for `SPRINT_ACCEL_WINDOW = 1` consecutive second grants `SPRINT_ACCEL_STEP = +5%` sprint speed per tier, cumulative, stacking multiplicatively on the 1.55 base; resets to 0 the moment sprinting stops (or during safe spawn).
+- **Sprint acceleration**: holding Shift + moving for `SPRINT_ACCEL_WINDOW = 1` consecutive second grants `SPRINT_ACCEL_STEP = +5%` sprint speed per tier, cumulative, stacking multiplicatively on the 1.55 base; **capped at `SPRINT_ACCEL_MAX = ×3`** (the HUD readout is the accel component; an endless sprint can never exceed ×3); resets to 0 the moment sprinting stops (or during safe spawn).
 - Sub-stepped movement + circle collision (§6). Camera: pointer-locked, pitch clamp ±85°, sensitivity 0.002.
 - **Safe spawn**: 5 s rooted + invincible at level start, with visible countdown; mobs don't track or attack during it.
 
@@ -486,9 +486,9 @@ Pipeline order (binding structure; the exact pass parameters are "~5% of the old
 ### 16.1 Spawn system
 Per level (non-boss): compute slots and build a spawn PLAN (cheap data) then reveal one mob every `SPAWN_INTERVAL = 0.5 s` (first reveals immediately) so construction is spread out. A queued spawn within 30 m of the player is deferred (rotates to the back of the queue). While the title screen holds, spawns still drain but mobs are frozen (`frozen` flag); during safe spawn they idle. Mobs > 40 m from the player are frozen immobile (`FROZEN_DIST`).
 
-- **Slots**: `min(round((2 + (level − 1)) × spawnMult), MAX_ALIVE 100)`; +2 if an ARENA is present. `spawnMult = 1 + (level + souls)/10` (level AND banked souls both accelerate spawns). **Spawns only occur more than 30 m from the player** (`SPAWN_PLAYER_DIST`): a queued spawn whose spot is too close rotates to the back of the queue until the player moves away — nothing materializes next to you.
+- **Slots**: `min(round((2 + (level − 1)) × spawnMult), MAX_ALIVE 200)`; +2 if an ARENA is present. `spawnMult = 1 + (level + souls)/10` (level AND banked souls both accelerate spawns). **Spawns only occur more than 30 m from the player** (`SPAWN_PLAYER_DIST`): a queued spawn whose spot is too close rotates to the back of the queue until the player moves away — nothing materializes next to you.
 - **Candidate cells**: non-empty cells at BFS distance ≥ 6 from the entrance, EXCLUDING the exit room; shuffled.
-- **Far-frozen bodies**: mobs more than 40 m from the player are IMMOBILE (`FROZEN_DIST` — idle in place, no AI/tracking/attacks), which makes the 100-body cap affordable (distant mobs cost almost nothing per frame).
+- **Far-frozen bodies**: mobs more than 40 m from the player are IMMOBILE (`FROZEN_DIST` — idle in place, no AI/tracking/attacks), which makes the 200-body cap affordable (distant mobs cost almost nothing per frame).
 - **Type pick**: biome weight column × room-enemy modifiers, weighted sample.
 - **Rats**: a RAT roll spawns a pack of 2–3 at one cell (clamped to rat cap 6 and live-body cap), each rat a separate body; 0 drops.
 - **Elites**: 1-in-10 per non-rat spawn for eligible types (ARMORED, ARCHER, BRUTE, WRAITH). ARENA: first spawn roll guaranteed elite if eligible.
@@ -583,7 +583,7 @@ Rises once the ENTIRE level is cleared (no living non-boss enemies, spawn queue 
 
 | Source | Effect |
 |---|---|
-| Level | move speed ×(1 + 0.05(level−1)); attack speed ×(1 + 0.05·floor((level−1)/3)); **mob HP ×(1 + 0.1·floor(level/5))**; spawn slots +1/level (×spawnMult, cap 100); **spawnMult = 1 + (level + souls)/10** (level AND souls both accelerate spawns) |
+| Level | move speed ×(1 + 0.05(level−1)); attack speed ×(1 + 0.05·floor((level−1)/3)); **mob HP ×(1 + 0.1·floor(level/5))**; spawn slots +1/level (×spawnMult, cap 200); **spawnMult = 1 + (level + souls)/10** (level AND souls both accelerate spawns) |
 | Held orbs | sword scale +20%/10 orbs (cap ×4 at 150); orb damage +2%/orb; orbs > 100 add buff-drop chance |
 | Boss kills | +10% mob move AND attack speed each (permanent, multiplicative) |
 | NG+ | enemy HP ×(1 + 2·ngPlus) — NG+ effects doubled (× level-HP bonus above); run restarts at floor(level/2) keeping 90% of souls (flat toll) + the weapon tier |
@@ -708,7 +708,7 @@ All player-facing text is part of the game feel and is binding (text is not a gr
 - **No-ammo message**: shown once per dry-fire stretch; resets after a successful shot.
 - **Hit-stop**: world dt zeroed while active; camera shake, HUD, and input still process.
 - **Carried buff**: captured BEFORE the state is replaced; side effects re-applied only AFTER the level systems are rebuilt; when no buff is carried, stuck visuals are cleared (the gone-fireball fix).
-- **Rat pack**: one RAT roll spawns a pack of 2–3 rats at one cell; pack size clamps to the rat cap (6) and the live-body cap (16).
+- **Rat pack**: one RAT roll spawns a pack of 2–3 rats at one cell; pack size clamps to the rat cap (6) and the live-body cap (200).
 - **Elite roll**: 1-in-10 per non-rat spawn, eligible types only; ARENA first spawn roll is guaranteed elite if its type is eligible.
 - **BURN**: never on boss or arena levels; spawns at the walkable cell farthest from the player once the level is cleared.
 - **Title gate**: lifts only when the rolling ~3 s average fps ≥ 30 AND the spawn queue is drained (spawn-drain prevents the post-title hitch); hard 8 s max-hold so the player is never trapped.
