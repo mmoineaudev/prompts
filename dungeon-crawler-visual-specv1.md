@@ -526,7 +526,7 @@ Per level (non-boss): compute slots and build a spawn PLAN (cheap data) then rev
 | Armored | Warlord | 10 | ×1.3 | 3 | |
 | Archer | Sharpshooter | 2 | — | 2 | 2-arrow fan (±8°) |
 | Brute | Ogre | 16 | ×1.2 | 4 | scale ×1.9 |
-| Wraith | Banshee | 4 | ×1.4 | 3 | long-range soul orb cast |
+| Wraith | Banshee | 4 | ×1.4 | 3 | |
 
 ### 16.4 Spawn weights per biome (sum 100; Skeleton, Magician, Armored, Archer, Rat, Brute, Wraith)
 
@@ -555,7 +555,6 @@ Every 7th level; one boss at the exit cell (portal closed until it dies).
 - **AI** (states CHASE/CHARGING/DEAD):
   - Drift toward player at 2.2 u/s beyond 2.5 u.
   - **Charge**: off cooldown and within 14 u → telegraph → dash at 14 u/s for 0.9 s along a locked direction; contact within 1.4 u deals 1 (once per charge); cooldown 3.2 s (first charge at ×0.6). Collision radius 0.9.
-  - **Orb volley**: every **random 1–3 s interval** (`BOSS.ORB_MIN/ORB_MAX`), hurls a soul orb toward the player (9 u/s, damage 1 — same pooled spectral-orb projectile as the wraiths, breakable by the sword swing).
   - **Summon**: every 6 s, up to 3 projectile-firing wraiths at random candidate cells, cap 6 living summoned wraiths.
 - **Defeat**: `bossKills++`, 5-minute uncapped buff, +1 permanent max heart (+1 heal), portal opens, message. Boss bar during the fight (green → amber → red at 50%/25%).
 
