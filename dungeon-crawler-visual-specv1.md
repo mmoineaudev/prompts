@@ -362,16 +362,16 @@ Combo window: 0.34 s from each recover start (0.14 recover + 0.20 input grace); 
 ### 9.3 Evolution (the Souls Ladder)
 `collectedOrbs` IS the souls counter (orbs = souls — ONE notion). Every orb pickup increments it; spending ammo lowers it, but the weapon tier LOCKS at the max reached (`weaponTier` only ever raises). NG+ keeps 90% of the counter (flat 10% toll) and keeps the tier. A fresh run resets both.
 
-- Tier: `min(floor(collectedOrbs / 100), 5)` evaluated as a ceiling — once reached, never reverts. Every tier: **+1 damage per hit** and a NEW weapon form (silhouette, color identity — see table). Strictly cumulative; never reverts.
+- Tier: exponential thresholds — **T1=100, T2=200, T3=400, T4=800, T5=1600** souls (`EVOLUTION.TIER_THRESHOLDS`, each tier doubles the previous — user ruling), evaluated as a ceiling — once reached, never reverts. Every tier: **+1 damage per hit** and a NEW weapon form (silhouette, color identity — see table). Strictly cumulative; never reverts.
 
 | Tier | Souls | Form identity | Damage | Effects |
 |---|---|---|---|---|
 | 0 | 0–99 | crude executioner's blade | 2/2/3 | 1% legendary electric proc |
 | 1 | 100–199 | proper knight's arming sword (crossguard) | 3/3/4 | — |
-| 2 | 200–299 | runic greatsword (glowing runes) | 4/4/5 | — |
-| 3 | 300–399 | crystal soulblade (faceted crystal) | 5/5/6 | arc bolt 10% per landing strike |
-| 4 | 400–499 | white-hot soulfire greatblade | 6/6/7 | arc bolt 35% per strike |
-| 5 | 500+ | lightsaber throwing electric arcs | 7/7/8 | 2 arc bolts on EVERY landing strike + idle crackle |
+| 2 | 200–399 | runic greatsword (glowing runes) | 4/4/5 | — |
+| 3 | 400–799 | crystal soulblade (faceted crystal) | 5/5/6 | arc bolt 10% per landing strike |
+| 4 | 800–1599 | white-hot soulfire greatblade | 6/6/7 | arc bolt 35% per strike |
+| 5 | 1600+ | lightsaber throwing electric arcs | 7/7/8 | 2 arc bolts on EVERY landing strike + idle crackle |
 
 - **Range**: +4% reach per tier, stacked on the orb ladder.
 - **Electric proc** (all tiers): on any landing strike, 1% chance to chain a blast killing every enemy within 20 u (shake + hit-stop 0.12 s + message). Can co-fire with arc bolts.
@@ -598,6 +598,7 @@ Rises once the ENTIRE level is cleared (no living non-boss enemies, spawn queue 
 |---|---|
 | SOULS counter (top-right) | `collectedOrbs` — the ONE souls/ammo counter (orbs = souls; no separate lifetime line) |
 | Power suffix | sword scale (+% power) |
+| Danger glow | 4 screen borders, red edge gradient — front → top, behind → bottom, right → right, left → left; alpha = min(1, Σ(1/d)/2) over living enemies within 40 m of that sector (additive, no nearest-enemy computation) |
 | HP bar + number | `health` / `maxHealth` |
 | Level title | `LEVEL n · NG+k — <biome label>` |
 | Timer | `180 − levelTime` (m:ss; red under 30 s; NG+ suffix) |
@@ -659,7 +660,7 @@ Headless Node scripts (no browser except the smoke test). The scripts stub `docu
 
 **biome-check** (11 gates): sequence = 10 biomes; palettes have all 9 keys; the 5 new biomes' palette VALUES match the spec verbatim; spawn-weight columns sum to exactly 100 with 7 entries; every biome has a `BIOME_ROOM_MODIFIERS` entry; eligibility resolves (FLOODED_RUINS exempt from the themed-room rule) and every room type appears somewhere; per-biome eligible room weight ≥ 100; every room type has `PROPS.PROPS_PER_ROOM`; referenced light sources exist; TEMPLE modifier = {ARMORED 1.2}; light probe (default 10 seeds, arg-configurable) — every biome avg ≤ 154 / max ≤ 199, vaultOnly torch avg ≤ 10 / max ≤ 50.
 
-**weapon-check** (12 gates): EVOLUTION block complete + finite; tier math (0/99/100/199/200/500/999 → 0/0/1/1/2/5/5); damage ladder 2/2/3→7/7/8 + brute breakpoint (HP 8 dies in 2 hits at tier 5, armored 5 dies in 1 at tier 3); arc table (lengths = MAX_TIER+1, T5 = 1.0/2, pool ≥ 6); ELECTRIC_CHANCE/RANGE finite + referenced in Game; blade length monotonic 0.76→1.0, TIP_LOCAL = length × 0.79, scale clamp ≥ 4; HUD single SOULS counter (no `#souls-line`, no `#tier-pips`) + all 6 tier icons present; Game.js free of `soulsEarned`; six per-tier form builders + `_formMeshes` registry present; no Torus/TorusKnot geometry in PlayerSword; Game.js writes the single souls counter; dungeon-check 0/40.
+**weapon-check** (12 gates): EVOLUTION block complete + finite; tier math exponential 100/200/400/800/1600 (0/99/100/199/200/399/400/799/800/1599/1600 → 0/0/1/1/2/2/3/3/4/4/5); damage ladder 2/2/3→7/7/8 + brute breakpoint (HP 8 dies in 2 hits at tier 5, armored 5 dies in 1 at tier 3); arc table (lengths = MAX_TIER+1, T5 = 1.0/2, pool ≥ 6); ELECTRIC_CHANCE/RANGE finite + referenced in Game; blade length monotonic 0.76→1.0, TIP_LOCAL = length × 0.79, scale clamp ≥ 4; HUD single SOULS counter (no `#souls-line`, no `#tier-pips`) + all 6 tier icons present; Game.js free of `soulsEarned`; six per-tier form builders + `_formMeshes` registry present; no Torus/TorusKnot geometry in PlayerSword; Game.js writes the single souls counter; dungeon-check 0/40.
 
 **browser smoke** (headless Chromium via raw CDP, Node WebSocket): boot the game against the dev server; wait for level build; assert canvas + WebGL2; HUD ids present (`#orb-count`, `#perf-warning`, `#biome-label`, `#timer`, `#hp-fill`, `#combo-pips`, `#weapon-slot`, `#stats-panel`); single souls label `SOULS`; `#perf-warning` hidden; loading screen passed; timer advances; **zero JS exceptions**.
 
