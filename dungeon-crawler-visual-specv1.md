@@ -40,6 +40,8 @@ All binds use `event.code` (physical key position, not layout label) — this ma
 | Toggle post-processing | `KeyP` | edge | default ON |
 | Leaderboard panel | `Tab` | edge | |
 | Restart / New Game+ (death screen) | `KeyN` / `KeyY` | edge | also clickable buttons |
+| Save for later (death screen) | `KeyS` | edge | writes the run to localStorage; one save per death screen |
+| Load last save / New Game (startup menu) | `KeyL` / `KeyN` | edge | menu appears only when a save exists |
 | Pointer lock | click on canvas | — | RMB context menu suppressed |
 
 Input handling: `InputSystem` stores key/mouse state from `window` listeners (`keydown/keyup`, `mousedown/mouseup`, `mousemove` accumulated deltas); consumers read `isPressed(code)`, `isMouseDown(button)`, `consumeMouse()` (returns accumulated deltas and resets), `isPointerLocked()`; click on canvas requests pointer lock; RMB context menu is prevented. Edge-triggering (E, P, Tab, Y/N, RMB combo) is done by the consumer comparing previous-frame state.
@@ -51,9 +53,11 @@ Input handling: `InputSystem` stores key/mouse state from `window` listeners (`k
 - **Level flow**: spawn at the entrance room → explore → kill enemies → collect orbs → reach the golden exit → press E → next level. The exit portal is hidden/closed on boss levels until the boss dies.
 - **Boss cadence**: every 7th level (`BOSS.INTERVAL = 7`) is a single-boss arena: levels 7, 14, 21, 28… The boss biome (SPECTRAL_COURT) overrides the normal biome ladder on those levels.
 - **Timed run**: `TIMED_RUN.LEVEL_TIME_LIMIT = 180` seconds per level. `levelTime` counts up while playing; at 180 s the run ends (reason "time"). The run timer does not tick while the title screen holds the scene, and starts fresh after it lifts (so loading lag never counts).
-- **Death**: any lethal damage ends the run (reason "dead"). On death, the run is submitted to the leaderboard and the death screen offers **Restart [N]** (fresh run, level 1, everything reset) or **New Game+ [Y]**:
+- **Death**: any lethal damage ends the run (reason "dead"). On death, the run is submitted to the leaderboard and the death screen offers **Restart [N]** (fresh run, level 1, everything reset), **New Game+ [Y]**, or **Save for later [S]**:
   - NG+ starts at `max(1, floor(level / 2))`, keeps `floor(bankedOrbs * 0.9)` orbs, increments `ngPlus`, and keeps `bossKills`. Mobs get +100% HP per NG+ cycle (`enemyHpMultiplier = 1 + ngPlus`).
   - A fresh restart: level 1, 0 orbs, ngPlus 0, bossKills 0, max health 3.
+  - **Save [S]** writes the run to localStorage (`dungeonCrawlerSave`): level, runTime, orbs, souls, weapon tier, permanent hearts, NG+ cycle, boss kills, plus the just-recorded death entry.
+- **Startup**: if a save exists, a menu offers **Load last save [L]** (shows level + souls) or **New Game [N]**. Loading restarts the SAVED LEVEL from the beginning — fresh level, full health, spawn protection — with ALL meta-progression intact: orbs (no 10% penalty), souls, weapon tier, permanent hearts, NG+ cycle unchanged, boss kills kept. The save is consumed on load, and the stale death entry is removed from the ledger (the run didn't end there). A buff never carries across a save-load.
 - **Level advance** (E at exit, non-boss or boss-after-death): keeps `runTime`, `level + 1`, `collectedOrbs`, `ngPlus`, `bossKills`, `soulsEarned`, `weaponTier`, `maxHealth` (permanent hearts), and carries an active buff with **×5 its remaining time, capped at 90 s**. Health always starts a new level at full. The buff's side effects are re-applied AFTER the level systems are rebuilt (never against disposed systems).
 - **Boss defeat**: `bossKills++` (permanent +10% movement AND attack speed for all mobs, multiplicative), a 5-minute buff (uncapped duration), +1 permanent max heart (heal +1), and the exit portal opens.
 - **Loading/title screen** (each level): shows level number, biome name, active buff + description, and live stats (Souls, DMG ×, Orb DMG, Reach, Enemy HP, Mob speed, Spawns, Regen). It lifts when: the rolling average fps over a ~3 s window is ≥ 30 AND the enemy spawn queue is fully drained, or after a hard max-hold of 8 s. When it lifts: `safeSpawn = 5 s` and `invulnTimer = 5 s` (player rooted + invincible, mobs idle, countdown shown).
