@@ -403,7 +403,7 @@ One buff at a time; picking a new one REPLACES the current, and the roll NEVER r
 | 4 | GODSPEED | 60 s (cap 90) | attack speed +50% AND move speed +50% |
 | 5 | HUNTER | 60 s (cap 90) | spectral companion follows and lashes enemies (below) |
 
-- **Sources**: breaking breakables rolls `BUFF.CHANCE = 6%` per break, +0.05% per orb above 100, and drops a soul orb on `BUFF.ORB_DROP_CHANCE = 20%` of breaks. Boss kills grant `BUFF.BOSS_DURATION = 300 s` (5 min), NOT capped by the 90 s ceiling.
+- **Sources**: breaking breakables rolls `BUFF.CHANCE = 6%` per break, +0.05% per orb above 100, and drops `BUFF.ORB_DROP_MIN..MAX = 1..5` soul orbs on `BUFF.ORB_DROP_CHANCE = 20%` of breaks. Boss kills grant `BUFF.BOSS_DURATION = 300 s` (5 min), NOT capped by the 90 s ceiling.
 - **Cap rule**: breakable buffs hard-capped at `BUFF.MAX_DURATION = 90 s`; boss-kill buffs uncapped.
 - **Level carry**: an active buff carries to the next level at ×5 remaining time (capped 90 s). Never across death/restart.
 - **HUNTER companion**: HP 9999 (invulnerable), follows at 6.5 u/s keeping 2.5 u, attacks the nearest VISIBLE enemy within 7 u with a 2-damage beam; interval `1.0 / clamp(collectedOrbs/100, 0.25, 5)` (more orbs = faster); beam flash 0.35 s.
