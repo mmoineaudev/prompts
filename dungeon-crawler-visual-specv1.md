@@ -673,7 +673,7 @@ All player-facing text is part of the game feel and is binding (text is not a gr
 | Context | Text |
 |---|---|
 | Goal toasts (level start) | `Skeletons hunt you — reach the golden exit!` · `Slay them for orbs — shoot or swing` · `Level ${n} — descend!` (level > 1) · `New Game+ ${n} — the depths grow stronger` · `A new descent begins` |
-| Orb pickup | `Orb collected! +1 ammo` |
+| Orb pickup | (no toast — the instant-credit SOULS counter + 1 s orb visual are the feedback) |
 | No ammo | `No orbs! Slay skeletons to gather orbs` (shown once per dry-fire stretch; resets after a successful shot) |
 | Entered exit room | `The depths await — press E to descend` |
 | Directional hint | every 8 s: `Golden exit lies ${dir} (${dist}m)` — dist in whole meters; dir from the 8-way compass (atan2 sectors of 45°: north / northeast / east / southeast / south / southwest / west / northwest) |
