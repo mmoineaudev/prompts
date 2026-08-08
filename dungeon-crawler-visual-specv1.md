@@ -581,8 +581,8 @@ Rises once the ENTIRE level is cleared (no living non-boss enemies, spawn queue 
 
 | Source | Effect |
 |---|---|
-| Level | move speed ×(1 + 0.05(level−1)); attack speed ×(1 + 0.05·floor((level−1)/3)); **mob HP ×(1 + 0.1·floor(level/5))**; spawn slots +1/level (×spawnMult, cap 16); spawnMult ×1.1^(level−1) |
-| Held orbs | sword scale +20%/10 orbs (cap ×4 at 150); orb damage +2%/orb; spawn multiplier ×orbPower; orbs > 100 add +1 spawn multiplier per 100 and buff-drop chance; **+5% spawn rate per 50 souls** |
+| Level | move speed ×(1 + 0.05(level−1)); attack speed ×(1 + 0.05·floor((level−1)/3)); **mob HP ×(1 + 0.1·floor(level/5))**; spawn slots +1/level (×spawnMult, cap 16); **spawnMult = 1 + (level + souls)/10** (level AND souls both accelerate spawns) |
+| Held orbs | sword scale +20%/10 orbs (cap ×4 at 150); orb damage +2%/orb; orbs > 100 add buff-drop chance |
 | Boss kills | +10% mob move AND attack speed each (permanent, multiplicative) |
 | NG+ | enemy HP ×(1 + ngPlus) (× level-HP bonus above); run restarts at floor(level/2) keeping 90% of orbs |
 | Timer | 180 s/level, ends the run |
