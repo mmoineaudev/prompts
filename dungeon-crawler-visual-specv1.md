@@ -332,7 +332,7 @@ Plus, outside the entry: `ENEMY_SPAWN_WEIGHTS[id]` (7 numbers, sum 100), `BIOME_
 - Max health 3, +1 permanent heart per boss kill.
 - Damage: any hit sets `invulnTimer = 0.8 s`; damage ignored while invulnerable. Hit → damage flash + shake (0.25 s) + regen clock reset.
 - **Passive regen**: starts immediately (no delay — `REGEN_DELAY = 0`), +1 heart every 5 s, capped at max.
-- **Health pickups**: 15% per kill; full heal on pickup.
+- **Health pickups**: 15% per kill; pickup ADDS `DROP.HEALTH_RESTORE = 3` hearts, capped at max (never a flat set — permanent hearts are kept).
 
 ---
 
@@ -547,7 +547,7 @@ Drop-on-kill: Skeleton 1, Magician 1, Armored 2, Archer 1, Rat 0, Brute 3, Wrait
 
 Every 7th level; one boss at the exit cell (portal closed until it dies).
 
-- **HP**: `ceil(4 × BOSS.HP_MULT 15)` = **60** (halved from 120), then NG+ scaling.
+- **HP**: `ceil(4 × BOSS.HP_MULT 22.5)` = **90** (15x +50%), then NG+ scaling.
 - **Health bar**: a canvas sprite hovers above the boss showing current HP (red bar, drawn each frame; fades out with the death dissipation).
 - **Variant**: one of 7 (Skeleton, Armored, Archer, Brute, Wraith, Rat, Magician) — different look/scale/label, identical AI. Labels: BONE LORD / IRON GHOUL / SPECTRAL HUNTER / ASH TITAN / SPECTRAL LORD / VERMIN KING / LICH ARCHMAGE.
 - **AI** (states CHASE/CHARGING/DEAD):
@@ -571,7 +571,7 @@ Rises once the ENTIRE level is cleared (no living non-boss enemies, spawn queue 
 ## 19. Economy & pickups
 
 - **Orbs**: only from kills (drop-on-kill); none placed on the map. Auto-collect within 1.4 u. Pickup: `collectedOrbs++` AND `soulsEarned++`. `totalOrbs` (per-level count) unused for scoring.
-- **Health pickups**: 15% per kill; full heal.
+- **Health pickups**: 15% per kill; +3 hearts (capped at max).
 - **Buff pickups**: from broken breakables (6% + excess-orb bonus) — see §11. Boss kills grant directly.
 - **Breakables** (barrels/crates): HP 1, any damage source breaks (sword arc, orb hit, stepping on them); no orb drops; 6% buff roll per break (+0.05%/orb above 100); debris + smoke; ≤ 3/room. Sarcophagi (interactive): lid opens on first proximity (< 2.5 u), 30% chance to spawn a Wraith, guaranteed 1 orb, one-time.
 
