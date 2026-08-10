@@ -11,9 +11,9 @@ Reference implementation: Three.js + Vite browser game (raw Three.js + `three/ex
 ## 1. Game identity & design pillars
 
 - **The descent**: endless, level-by-level descent. Each level is a procedurally generated dungeon with an entrance and a golden exit portal; reaching the exit advances to the next level. The level number never resets except on death.
-- **Orb economy as risk/reward**: orbs are BOTH ammo and score. Kills drop orbs; you spend orbs to shoot; holding orbs makes the sword bigger/stronger AND makes the game spawn more enemies (more pressure, more drops). Dying costs everything on a fresh run, or 75% of banked orbs on NG+.
-- **Souls-ladder progression**: the souls counter (orbs = souls — one notion) drives a 6-tier sword evolution; the tier locks at the max reached and is communicated by the weapon's form, the slot label and a toast — never by a number on the HUD.
-- **Escalation without reset**: enemy count, enemy speed/attack, and the timer all scale with level; biomes cycle underneath. Boss kills permanently buff all mobs (+10% speed/attack each). NG+ stacks +200% enemy HP per cycle (effects doubled).
+- **Orb economy as risk/reward**: orbs are BOTH ammo and score. Kills drop orbs; you spend orbs to shoot; holding orbs makes the game spawn more enemies (more pressure, more drops) and past the spawn cap feeds enemy HP. Dying costs everything on a fresh run, or 75% of banked orbs on NG+.
+- **Souls-ladder progression**: the souls counter (orbs = souls — one notion) drives a 6-tier sword evolution; the tier locks at the max reached within a run (NG+ recalculates it from the kept bank) and is communicated by the weapon's form, the slot label and a toast — never by a number on the HUD.
+- **Escalation without reset**: enemy count, enemy speed/attack, and the timer all scale with level; biomes cycle underneath. Boss kills permanently buff all mobs (+10% speed/attack each). NG+ stacks +300% enemy HP per cycle (`HP_PER_NG = 3.0` — 100% base + doubled-effect +200% + an additional +100%).
 - **Timed pressure**: 180 seconds per level. Run out → the run ends.
 - **Buffs**: temporary, powerful, one at a time, looted from broken crates/barrels (or boss kills). Never the same buff twice in a row.
 - **Souls-like HUD**: hearts top-left (red bar), gold "Souls" counter, weapon slot, dark-fantasy panels. All HUD elements represent real state; no fake meters.
@@ -54,12 +54,12 @@ Input handling: `InputSystem` stores key/mouse state from `window` listeners (`k
 - **Boss cadence**: every 7th level (`BOSS.INTERVAL = 7`) is a single-boss arena: levels 7, 14, 21, 28… The boss biome (SPECTRAL_COURT) overrides the normal biome ladder on those levels.
 - **Timed run**: `TIMED_RUN.LEVEL_TIME_LIMIT = 180` seconds per level. `levelTime` counts up while playing; at 180 s the run ends (reason "time"). The run timer does not tick while the title screen holds the scene, and starts fresh after it lifts (so loading lag never counts).
 - **Death**: any lethal damage ends the run (reason "dead"). On death, the run is submitted to the leaderboard and the death screen offers **Restart [N]** (fresh run, level 1, everything reset), **New Game+ [Y]**, or **Save for later [S]**:
-  - NG+ starts at `max(1, floor(level / 2))`, keeps `floor(souls × 0.25)` (a heavy **75% toll** on the ONE souls counter — never a full reset), increments `ngPlus`, keeps `bossKills`, and KEEPS the weapon tier (the ladder never downgrades). Mobs get **+300% HP per NG+ cycle** (100% base + the doubled-effect ruling +200% + an additional +100%) AND **+100% bonus HP every 10 levels**; spawn pressure ABOVE the ×100 spawn cap converts to HP at +100% per 10 excess points (`enemyHpMultiplier = (1 + 3·ngPlus) × (1 + floor(level/10) + floor(max(0, level+souls−990)/10))`).
+  - NG+ starts at `max(1, floor(level / 2))`, keeps `floor(souls × 0.25)` (a heavy **75% toll** on the ONE souls counter — never a full reset), increments `ngPlus`, keeps `bossKills` and the **permanent hearts** (`maxHealth` carried), and **RECALCULATES the weapon tier from the post-toll bank** (`weaponTier = weaponTier(⌊collectedOrbs × 0.25⌋)`) — no free maxed blade across a cycle; within a run the tier still only upgrades. The death-screen NG+ button shows the tier the bank buys (`→ Tn` / `→ Dagger`). Mobs get **+300% HP per NG+ cycle** (100% base + the doubled-effect ruling +200% + an additional +100%) AND **+100% bonus HP every 10 levels**; spawn pressure ABOVE the ×100 spawn cap converts to HP LINEARLY at +150% per 10 excess points (`enemyHpMultiplier = (1 + 3·ngPlus) × (1 + floor(level/10)) × (1 + 1.5·floor(max(0, level+souls−990)/10))`).
   - A fresh restart: level 1, 0 orbs, ngPlus 0, bossKills 0, max health 3.
   - **Save [S]** writes the run to localStorage (`dungeonCrawlerSave`) AND mirrors it to a file on disk via the companion save-server (`scripts/save-server.mjs`, port 5174, started by `launch.sh`): level, runTime, souls (the single orbs/souls counter), weapon tier, permanent hearts, NG+ cycle, boss kills, plus the just-recorded death entry.
 - **Startup**: a TITLE SCREEN always shows first — a living spectral-court showcase scene (golden exit portal, hovering soul orbs, an idling Spectral Lord, cold pillar flames) with the game's name in huge type. The menu offers **Load last save [L]** (only when a save exists) and **New Game [N]**. Loading restarts the SAVED LEVEL from the beginning — fresh level, full health, spawn protection — with ALL meta-progression intact: souls (single counter, no 10% penalty on load), weapon tier, permanent hearts, NG+ cycle unchanged, boss kills kept. The save is NOT consumed by loading: it persists until a new death-save overwrites it, so the Load option never disappears. At startup the game prefers the local copy and falls back to the file-backed server copy (survives browser storage wipes, private windows, and localhost-vs-LAN origin switches between server runs). The stale death entry is removed from the ledger (the run didn't end there). A buff never carries across a save-load.
 - **Level advance** (E at exit, non-boss or boss-after-death): keeps `runTime`, `level + 1`, `collectedOrbs` (the one souls counter), `ngPlus`, `bossKills`, `weaponTier`, `maxHealth` (permanent hearts), and carries an active buff with **×5 its remaining time, capped at 90 s**. Health always starts a new level at full. The buff's side effects are re-applied AFTER the level systems are rebuilt (never against disposed systems).
-- **Boss defeat**: `bossKills++` (permanent +10% movement AND attack speed for all mobs, multiplicative), a 5-minute buff (uncapped duration), +1 permanent max heart (heal +1), and the exit portal opens.
+- **Boss defeat**: `bossKills++` (permanent +10% movement AND attack speed for all mobs, multiplicative), a 5-minute buff (uncapped duration), +1 permanent max heart (heal +1), a **soul reward of `level × max(1, ngPlus)`** (they loop back into spawn pressure AND the weapon ladder — intended), and the exit portal opens.
 - **Loading/title screen** (each level): shows level number, biome name, active buff + description, and live stats (Souls, DMG ×, Orb DMG, Reach, Enemy HP, Mob speed, Spawns, Regen). It lifts when: the rolling average fps over a ~3 s window is ≥ 30 AND the enemy spawn queue is fully drained, or after a hard max-hold of 8 s. When it lifts: `safeSpawn = 5 s` and `invulnTimer = 5 s` (player rooted + invincible, mobs idle, countdown shown).
 
 ---
@@ -101,7 +101,7 @@ src/
                             sparks, smoke, danger/growth lights, evolution forms
     OrbSystem.js            Drop-only orb economy: instant-credit orbs (1 s visual), health/buff
                             pickups, pickup rings, death bursts
-    OrbShooter.js           Orb weapon: pooled projectiles (48 + 10 fireball slots), sequence logic,
+    OrbShooter.js           Orb weapon: pooled projectiles (48 + 6 fireball slots), sequence logic,
                             bounces, explosions, fireball variant
     SkeletonSystem.js       Enemy spawner + AI driver: spawn plan/queue, reveal pacing, per-type
                             behaviors, LOS/pathing, projectiles (orb/arrow pools), brute shockwave,
@@ -165,7 +165,7 @@ The **update loop** (`_animate`): rAF; `dt = min((now − last)/1000, 0.1)`; per
 {
   player: { x, y, z, yaw, pitch },
   collectedOrbs,        // THE ONE souls counter (orbs = souls): ammo, score, spawn + ladder source
-  weaponTier,           // 0..5, locked at the max reached (spending ammo never downgrades)
+  weaponTier,           // 0..5, locked at the max reached within a run (spending ammo never downgrades); recomputed on NG+ from the kept bank
   ngPlus,               // NG+ cycle
   bossKills,            // permanent: +10% mob move/attack per kill
   totalOrbs,            // per-level pickup count (unused for scoring)
@@ -177,7 +177,7 @@ The **update loop** (`_animate`): rAF; `dt = min((now − last)/1000, 0.1)`; per
   sprintHoldTime, sprintTier, buffEffect (0..5), buffTime,
 }
 ```
-Plus Game-side runtime state (not persisted): `_maxHealth` (permanent hearts, grows with boss kills), `_bossPortalOpen`, `_degraded` (perf), fire-patch pool, arc bolt pool, etc.
+Plus Game-side runtime state (not persisted): `_maxHealth` (mirrors `state.maxHealth` — permanent hearts, grows with boss kills; the GameState constructor now accepts `maxHealth` so level-advance, NG+ and save/load all carry it, and `fromJSON` self-heals stale desynced saves to `base + bossKills`), `_bossPortalOpen`, `_degraded` (perf), fire-patch pool, arc bolt pool, etc.
 
 ---
 
@@ -353,31 +353,33 @@ Combo window: 0.34 s from each recover start (0.14 recover + 0.20 input grace); 
 ### 9.2 Formulas
 - Base damage per step (tier 0): 2 / 2 / 3.
 - `swordHitDamage(step, tier) = base + tier` (pure function; tier 5 → 7 / 7 / 8).
-- Applied: `currentDamage = swordHitDamage(step, tier) × damageMult`, `damageMult = 1 + (scale − 1) × 0.5`.
+- Applied: `currentDamage = swordHitDamage(step, tier) × damageMult`.
+- **damageMult (composition rule, binding)**: `damageMult = (1 + (scale − 1) × 0.5) × 1.1^tier × 1.1^⌊level/5⌋` — a SIZE part (half the size bonus), a TIER part (×1.1 each), and a LEVEL part (×1.1 per 5 levels — user ruling: "necessary for surviving NG+"). At T5 size ×5 the size part alone is ×3; tier ×1.61 and level ×1.1^⌊L/5⌋ stack on top.
+- **Scale (sword SIZE ladder, binding)**: `scale = min(swordSizeScale(tier) × lengthMult, 5.0)`; `swordSizeScale(tier) = 1 + 0.8·tier` (+80% per tier → exactly **×5 at tier 5**). **Orbs held NO LONGER drive size** (user ruling: "the orb should always be the same size as the beginning") — `orbPowerMultiplier` is retained only for the orb-economy reference scripts. EMPOWERED's `lengthMult` stacks on top, clamped at `MAX_TOTAL_SCALE = 5.0`.
+- **Attack speed (binding)**: `attackSpeedFromSouls(souls) = 1 + 0.001·souls` (+100% at 1000 souls); total attack speed = buffs (EMPOWERED ×1.2 / GODSPEED ×1.5) × souls component, multiplying on top (composition rule). Scales the duration fields only, never damage/arcs.
 - Range: `SWORD.RANGE (2.2) × scale × (1 + 0.04 × tier)`; thrust ×1.25.
-- Scale: `min(orbPowerMultiplier(orbs) × lengthMult, 5.0)`; `orbPowerMultiplier = 1 + min(floor(orbs/10), 15) × 0.2` (+20%/10 orbs, cap ×4 at 150). The same multiplier drives spawns (§16.1).
 - Hit-stop 0.06 s on any sword hit. Blade flash 0.1 s.
 - The swing also: hits breakables in a slightly looser cone (±(maxDot−0.12)) over the full reach; breaks enemy projectiles in the cone (`breakProjectiles`).
 
 ### 9.3 Evolution (the Souls Ladder)
-`collectedOrbs` IS the souls counter (orbs = souls — ONE notion). Every orb pickup increments it; spending ammo lowers it, but the weapon tier LOCKS at the max reached (`weaponTier` only ever raises). NG+ keeps 90% of the counter (flat 10% toll) and keeps the tier. A fresh run resets both.
+`collectedOrbs` IS the souls counter (orbs = souls — ONE notion). Every orb pickup increments it; spending ammo lowers it, but the weapon tier LOCKS at the max reached within a run (`weaponTier` only ever raises). NG+ keeps 25% of the counter (heavy 75% toll) and **recalculates the tier from the kept bank** — `weaponTier = weaponTier(⌊collectedOrbs × 0.25⌋)` (user ruling: no free maxed blade across a cycle). A fresh run resets both.
 
-- Tier: exponential thresholds — **T1=100, T2=200, T3=400, T4=800, T5=1600** souls (`EVOLUTION.TIER_THRESHOLDS`, each tier doubles the previous — user ruling), evaluated as a ceiling — once reached, never reverts. Every tier: **+1 damage per hit** and a NEW weapon form (silhouette, color identity — see table). Strictly cumulative; never reverts.
+- Tier: exponential thresholds — **T1=50, T2=100, T3=200, T4=400, T5=800** souls (`EVOLUTION.TIER_THRESHOLDS`, each tier doubles the previous — **HALVED from 100/200/400/800/1600** by user ruling), evaluated as a ceiling — once reached, never reverts (within a run). Every tier: **+1 damage per hit** and a NEW weapon form (silhouette, color identity — see table). Strictly cumulative; never reverts.
 
 | Tier | Souls | Form identity | Damage | Effects |
 |---|---|---|---|---|
-| 0 | 0–99 | crude executioner's blade | 2/2/3 | 1% legendary electric proc |
-| 1 | 100–199 | proper knight's arming sword (crossguard) | 3/3/4 | — |
-| 2 | 200–399 | runic greatsword (glowing runes) | 4/4/5 | — |
-| 3 | 400–799 | crystal soulblade (faceted crystal) | 5/5/6 | arc bolt 10% per landing strike |
-| 4 | 800–1599 | white-hot soulfire greatblade | 6/6/7 | arc bolt 35% per strike |
-| 5 | 1600+ | lightsaber throwing electric arcs | 7/7/8 | 2 arc bolts on EVERY landing strike + idle crackle |
+| 0 | 0–49 | Dagger (crude executioner's blade) | 2/2/3 | 5% electric blast (×5 orb dmg) |
+| 1 | 50–99 | proper knight's arming sword (crossguard) | 3/3/4 | — |
+| 2 | 100–199 | runic greatsword (glowing runes) | 4/4/5 | — |
+| 3 | 200–399 | crystal soulblade (faceted crystal) | 5/5/6 | arc bolt 10% per landing strike (orb dmg) |
+| 4 | 400–799 | white-hot soulfire greatblade | 6/6/7 | arc bolt 35% per strike (orb dmg) |
+| 5 | 800+ | lightsaber throwing electric arcs | 7/7/8 | 2 arc bolts on EVERY landing strike + idle crackle + 5% blast ×5 orb dmg |
 
-- **Range**: +4% reach per tier, stacked on the orb ladder.
-- **Electric proc** (all tiers): on any landing strike, 1% chance to chain a blast killing every enemy within 20 u (shake + hit-stop 0.12 s + message). Can co-fire with arc bolts.
-- **Arc bolts** (tiers 3–5): pooled homing projectiles (pool 8; max 6 in flight). On a landing strike, roll `ARC_CHANCE[tier]`; spawn `ARC_BOLTS[tier]` bolts aimed at the nearest ALIVE enemy within 20 u; 24 u/s, life 1.2 s, re-target on target death, flat 1 damage on impact, fizzle at life end. Enemies only.
+- **Range**: +4% reach per tier, stacked on the tier size ladder.
+- **Electric proc** (all tiers, damage-based — user ruling): on any landing strike, **5%** chance (`SWORD.ELECTRIC_CHANCE`) to chain a blast dealing **5× orb damage** (`SWORD.ELECTRIC_DAMAGE_MULT × orbDamage(souls)`) to every enemy within 20 u — NO MORE instant kill (shake + hit-stop 0.12 s + message `ELECTRIC CHAIN — N foes blasted!`). Can co-fire with arc bolts.
+- **Arc bolts** (tiers 3–5): pooled homing projectiles (pool 8; max 6 in flight). On a landing strike, roll `ARC_CHANCE[tier]` (T3 10% / T4 35% / T5 100% ×2 bolts); spawn `ARC_BOLTS[tier]` bolts aimed at the nearest ALIVE enemy within 20 u; 24 u/s, life 1.2 s, re-target on target death, **damage = orb damage frozen at fire time** (`Math.round(orbDamage(collectedOrbs))` — user ruling: bolts from T3+ do orb damage), fizzle at life end. Enemies only.
 - **Evolution feedback**: toast (`Your blade awakens — Tier N`; final `Your blade is whole — the lightsaber sings`), blade flash, 0.1 s non-blocking hit-stop. Form rebuilt on level start from the stored tier.
-- **Form constraints** (binding taste): blades straight (no bends); weapon floats (no hands); never lit by the headlight (self-lit, layer 2); no shadow casting. Tier 5 adds exactly ONE extra camera-attached point light (budget §22). Blade color identity stops following the orb-size color ladder at tier 3+ (the form owns its look); the orb ladder keeps driving size/range only.
+- **Form constraints** (binding taste): blades straight (no bends); weapon floats (no hands); never lit by the headlight (self-lit, layer 2); no shadow casting. Tier 5 adds exactly ONE extra camera-attached point light (budget §22). Blade color identity stops following the orb-size color ladder at tier 3+ (the form owns its look); size/range come from the tier ladder only (orbs no longer affect the blade).
 
 ---
 
@@ -388,9 +390,10 @@ One collected orb = ONE 3-step sequence; ONE click = ONE step (each aimed at the
 - **Sequence**: steps 1–2 are normal orbs (bounce up to 3 times off floor/ceiling/walls, reflecting off the dominant axis, then fizzle on the next surface contact); step 3 is explosive and detonates on its FIRST contact with anything (floor, ceiling, wall, prop, enemy, or life end).
 - **Ammo**: only the FIRST step of a NEW sequence costs 1 orb; steps 2–3 of an open sequence are free. 0 orbs → "No orbs!" message. Hold LMB steps every `STEP_INTERVAL = 0.22 s`. Sequence expires after `SEQUENCE_WINDOW = 1.2 s` without a step.
 - **Projectile**: speed 12.4 u/s, lifetime 2.5 s, radius 0.3; direct-hit damage = `round(2 × orbDamageMultiplier(orbs))`, `orbDamageMultiplier = 1 + 0.02 × orbs` (base damage 2, doubled from 1).
-- **Explosion** (step 3): AOE `round(2 × orbDamageMultiplier)` to every enemy within `EXPLODE_RADIUS = 1.5` u (only if blast y < 2.6).
+- **Explosion** (step 3): AOE `round(5 × orbDamageMultiplier)` to every enemy within `EXPLODE_RADIUS = 2` u (only if blast y < 2.6) — base EXPLODE_DAMAGE raised 2 → 5 (user ruling; blasts through walls, accepted).
 - **Breakables**: orb hits break breakables (and continue). Enemy projectiles are NOT broken by orbs (sword only).
 - Pooled (48 normal + 6 fireball slots), zero per-shot allocation. Fireball slots carry NO shot-trace smear sprite and use reduced emissive (2.2) + shorter explosion rings (0.22 s) — the FIREBALL buff was the laggiest one, these cuts keep it cheap while held-spamming.
+- **Fireball module singletons** (binding): fireball materials + glow texture are built ONCE at module load (`getFireballShared()`), reused by every level, NEVER disposed — their GPU programs stay compiled, so activating or firing the buff never hitches mid-fight (same pattern as the weapon).
 
 **Fireball (FIREBALL buff)**: RMB hurls a free fiery projectile exploding on first contact (same explosion rules, no ammo cost, `FIREBALL_COOLDOWN = 0.35 s` while held). The sword is hidden while active.
 
@@ -421,7 +424,7 @@ One buff at a time; picking a new one REPLACES the current, and the roll NEVER r
 - `WebGLRenderer({antialias: true})`; `toneMapping = ACESFilmicToneMapping`, exposure 1.0; `shadowMap = PCFSoftShadowMap`; `outputColorSpace = SRGBColorSpace`; `pixelRatio = min(devicePixelRatio, 2)`; resize handler.
 - Camera: FOV 90 (was 75 — +20% wider), near 0.1, far 160. `scene.background` = biome fog color; `scene.fog = FogExp2(fog, fogDensity)`.
 - **Camera layers (binding design)**: layer 0 = world + headlight; layer 1 = enemy-glow pass (enemy meshes opt-in via `setEnemyTargets`); layer 2 = first-person sword. The camera has layers 0+2 enabled. The headlight (layer 0, camera-attached, no shadow) therefore NEVER lights the sword — the sword is self-lit.
-- **Shadows**: only the 8 torches nearest the player cast shadows (`TORCH_SHADOW_COUNT = 8`), map 256², near 0.5, far 11, bias −0.005, normalBias 0.02; nearest-8 re-evaluated every 0.5 s. Every other light `castShadow = false` forever.
+- **Shadows**: exactly ONE torch casts a shadow (`TORCH_SHADOW_COUNT = 1` — one cube shadow = 6 depth passes, the 48/frame 8-torch re-sort was the recurring hitch), map 256², near 0.5, far 11, bias −0.005, normalBias 0.02; assigned ONCE at level build to the torches nearest the entrance (static, never toggled per frame — toggling `castShadow` mid-game re-allocates shadow render targets). Every other light `castShadow = false` forever. Degraded tier 2 sets the budget to 0.
 
 ### 12.2 Post-processing (EffectComposer)
 Pipeline order (binding structure; the exact pass parameters are "~5% of the old look" — treat the numbers below as the binding values):
@@ -441,7 +444,7 @@ Pipeline order (binding structure; the exact pass parameters are "~5% of the old
 
 | Pool | Size | Notes |
 |---|---|---|
-| Player orb projectiles | 48 | + 10 fireball slots (separate slot pool, round-robin filtered by type) |
+| Player orb projectiles | 48 | + 6 fireball slots (separate slot pool, round-robin filtered by type; 10 → 6 perf cut) |
 | Explosion rings (orb / fireball) | 8 / 6 | additive torus rings |
 | Arc bolts (sword T3+) | 8 | homing |
 | Enemy arrows | 10 | archer |
@@ -486,17 +489,17 @@ Pipeline order (binding structure; the exact pass parameters are "~5% of the old
 ### 16.1 Spawn system
 Per level (non-boss): compute slots and build a spawn PLAN (cheap data) then reveal one mob every `SPAWN_INTERVAL = 0.5 s` (first reveals immediately) so construction is spread out. A queued spawn within 30 m of the player is deferred (rotates to the back of the queue). While the title screen holds, spawns still drain but mobs are frozen (`frozen` flag); during safe spawn they idle. Mobs > 40 m from the player are frozen immobile (`FROZEN_DIST`).
 
-- **Slots**: `min(round((2 + (level − 1)) × spawnMult), MAX_ALIVE 200)`; +2 if an ARENA is present. `spawnMult = min(1 + (level + souls)/10, ×100)` — level AND banked souls accelerate spawns, CAPPED at ×100 (`SPAWN_CAP`); past the cap, pressure feeds enemy HP at +100% per 10 excess points (the overflow rule). **Spawns only occur more than 30 m from the player** (`SPAWN_PLAYER_DIST`): a queued spawn whose spot is too close rotates to the back of the queue until the player moves away — nothing materializes next to you.
+- **Slots**: `min(round((2 + (level − 1)) × spawnMult), MAX_ALIVE 200)`; +2 if an ARENA is present. `spawnMult = min(1 + (level + souls)/10, ×100)` — level AND banked souls accelerate spawns, CAPPED at ×100 (`SPAWN_CAP`); past the cap, pressure feeds enemy HP LINEARLY at +150% per 10 excess points (the overflow rule, §3). **Spawns only occur more than 30 m from the player** (`SPAWN_PLAYER_DIST`): a queued spawn whose spot is too close rotates to the back of the queue until the player moves away — nothing materializes next to you.
 - **Candidate cells**: non-empty cells at BFS distance ≥ 6 from the entrance, EXCLUDING the exit room; shuffled.
 - **Far-frozen bodies**: mobs more than 40 m from the player are IMMOBILE (`FROZEN_DIST` — idle in place, no AI/tracking/attacks), which makes the 200-body cap affordable (distant mobs cost almost nothing per frame).
 - **Type pick**: biome weight column × room-enemy modifiers, weighted sample.
 - **Rats**: a RAT roll spawns a pack of 2–3 at one cell (clamped to rat cap 6 and live-body cap), each rat a separate body; 0 drops.
 - **Elites**: 1-in-10 per non-rat spawn for eligible types (ARMORED, ARCHER, BRUTE, WRAITH). ARENA: first spawn roll guaranteed elite if eligible.
 - **Scaling** (all enemies):
-  - `speedMult = (1 + 0.05 × (level − 1)) × (1 + 0.1 × bossKills)`
+  - `speedMult = (1 + 0.02 × (level − 1)) × (1 + 0.1 × bossKills)` (SPEED_PER_LEVEL 0.02 — corrected from +5%: +2% per level was the user ruling)
   - `attackMult = (1 + 0.05 × floor((level − 1)/3)) × (1 + 0.1 × bossKills)`
-  - HP: `ceil(hp × (1 + ngPlus))`.
-- **Live-body cap**: 16 total (rats individually).
+  - HP: `ceil(base × enemyHpMultiplier(ngPlus, level, souls))` — the §3 formula: `(1 + 3·ngPlus) × (1 + floor(level/10)) × (1 + 1.5·floor(max(0, level+souls−990)/10))`.
+- **Live-body cap**: 200 total (`MAX_ALIVE`, rats counted individually).
 - **Boss levels**: skip the plan; ONE boss at the exit cell (§17). **BURN** (§18) spawns later.
 
 ### 16.2 Shared AI
@@ -549,14 +552,17 @@ Drop-on-kill: Skeleton 1, Magician 1, Armored 2, Archer 1, Rat 0, Brute 3, Wrait
 
 Every 7th level; one boss at the exit cell (portal closed until it dies).
 
-- **HP**: `ceil(4 × BOSS.HP_MULT 22.5)` = **90** (15x +50%), scaled by the player's wealth: +25% per 50 souls held (`ceil(90 × (1 + 0.25·floor(souls/50)))` — 100 souls → 135, 300 souls → 225), then NG+ scaling (base × (1 + 3·ngPlus)).
+- **HP**: `ceil(4 × BOSS.HP_MULT 22.5)` = **90** base (15x +50%), scaled like every mob by NG+ AND the level term (+100% per 10 levels), then by the player's wealth × permanent-hearts stack with the combined excess HALVED (user ruling):
+  `ceil(4 × 22.5 × (1 + 3·ngPlus) × (1 + floor(level/10)) × (1 + ((1 + 0.25·⌊souls/50⌋) · 1.1^heartsExtra − 1)/2))` where `heartsExtra = max(0, maxHealth − 3)` (`HEARTS_HP_BONUS = 0.1` per heart past 3, `SOULS_HP_BONUS = 0.25` per 50 souls). The souls and hearts bonuses stack multiplicatively, then the excess over 1 is halved — a rich, heart-heavy player faces a tougher lord, but not double-dipped to absurdity. Examples at level 7 / NG 0: 49 souls → 90; 100 souls → 113; 300 souls → 158; 5 hearts → 118; 100 souls + 5 hearts → 154.
 - **Health bar**: a canvas sprite hovers above the boss showing current HP (red bar, drawn each frame; fades out with the death dissipation).
 - **Variant**: one of 7 (Skeleton, Armored, Archer, Brute, Wraith, Rat, Magician) — different look/scale/label, identical AI. Labels: BONE LORD / IRON GHOUL / SPECTRAL HUNTER / ASH TITAN / SPECTRAL LORD / VERMIN KING / LICH ARCHMAGE.
-- **AI** (states CHASE/CHARGING/DEAD):
-  - Drift toward player at 2.2 u/s beyond 2.5 u.
-  - **Charge**: off cooldown and within 14 u → telegraph → dash at 14 u/s for 0.9 s along a locked direction; contact within 1.4 u deals 1 (once per charge); cooldown 3.2 s (first charge at ×0.6). Collision radius 0.9.
-  - **Summon**: every 6 s, up to 3 projectile-firing wraiths at random candidate cells, cap 6 living summoned wraiths.
-- **Defeat**: `bossKills++`, 5-minute uncapped buff, +1 permanent max heart (+1 heal), portal opens, message. Boss bar during the fight (green → amber → red at 50%/25%).
+- **AI** (states CHASE/CHARGING/BLINKING/DEAD):
+  - Drift toward the player at 2.2 u/s beyond 2.5 u (grid pathing when a wall blocks the line — same pathing as mobs; only charges on wall-free paths, the stuck-boss fix).
+  - **Charge**: off cooldown and within 14 u → telegraph → dash at 14 u/s for 0.9 s along a locked direction; contact within 1.4 u deals **2** (`CHARGE_DMG = 2` — fixed at 2 by user ruling, once per charge); cooldown 3.2 s (first charge at ×0.6). Collision radius 0.9.
+  - **Summon**: every 6 s, a pack of `⌊3 × 1.5^heartsExtra⌋` projectile-firing wraiths at random candidate cells (`SUMMON_HEARTS_MULT = 1.5` per permanent heart past 3 — a hearty lord-slayer faces a bigger court), cap **25** living summoned wraiths (`MAX_MINIONS`, raised from 6 so the rule matters).
+  - **BLINK (teleport-nova)**: cooldown 8 s (first at ×0.5). Teleports ONTO the player (through walls — the anti-kiting tool), then charges a sparking spell for `BLINK_TELEGRAPH = 1.0 s` (expanding spark ring + 12 sparks — the dodge window: sprint out of the blast), then detonates: **3 hearts** (`BLINK_DMG`) to anything within **3 u** (`BLINK_RADIUS`). The player is the only damageable entity on a boss level, so the nova is a player attack. State BLINKING (frozen while charging).
+  - **SMOKE**: cooldown 6 s (first at ×0.7). Hurls a homing smoke cloud (flight `SMOKE_FLIGHT = 0.7 s` at `SMOKE_SPEED = 10 u/s`), which lingers `SMOKE_DURATION = 4 s` (radius `SMOKE_RADIUS = 2.2`); standing inside costs **1 heart/s** (`SMOKE_DMG` DoT, ticked by SkeletonSystem `_tickBossSmoke`). Fires alongside any other attack (doesn't change state). Clouds are disposed with the boss.
+- **Defeat**: `bossKills++`, 5-minute uncapped buff, +1 permanent max heart (+1 heal), **soul reward `level × max(1, ngPlus)`**, portal opens, message. Boss bar during the fight (green → amber → red at 50%/25%).
 
 ---
 
@@ -564,7 +570,7 @@ Every 7th level; one boss at the exit cell (portal closed until it dies).
 
 Rises once the ENTIRE level is cleared (no living non-boss enemies, spawn queue drained) — non-boss, non-arena levels. At most one per level.
 
-- HP `ceil(3 × 30 × (1 + ngPlus))` = 90 on NG 0 (boss-tier), then NG+ scaling. Speed 2.6, damage 1, range 1.3, cooldown 1.4 s. Chases straight-line (sub-stepped, collision-resolved — does NOT phase).
+- HP `ceil(3 × 30 × enemyHpMultiplier(ngPlus, 1, 0))` = `ceil(90 × (1 + 3·ngPlus))` = 90 on NG 0 (boss-tier), then NG+ scaling (×4 at NG+1). Speed 2.6, damage 1, range 1.3, cooldown 1.4 s. Chases straight-line (sub-stepped, collision-resolved — does NOT phase).
 - **Ground fire**: while moving, every 0.6 s spawns a fire patch at its position (pooled, visual-only — patches do NOT damage).
 - Drops 2 orbs. Dies like any enemy. (The same pooled fire-patch system serves the electric chain blast — visual + light only.)
 
@@ -583,10 +589,10 @@ Rises once the ENTIRE level is cleared (no living non-boss enemies, spawn queue 
 
 | Source | Effect |
 |---|---|
-| Level | move speed ×(1 + 0.05(level−1)); attack speed ×(1 + 0.05·floor((level−1)/3)); **mob HP ×(1 + floor(level/10))**; spawn slots +1/level (×spawnMult, cap 200); **spawnMult = min(1 + (level + souls)/10, ×100)**; past ×100, pressure feeds HP (+100%/10 excess) |
-| Held orbs | sword scale +20%/10 orbs (cap ×4 at 150); orb damage +2%/orb; orbs > 100 add buff-drop chance |
+| Level | move speed ×(1 + 0.02(level−1)); attack speed ×(1 + 0.05·floor((level−1)/3)); **mob HP ×(1 + floor(level/10))**; spawn slots +1/level (×spawnMult, cap 200); **spawnMult = min(1 + (level + souls)/10, ×100)**; past ×100, pressure feeds HP LINEARLY (+150%/10 excess: `×(1 + 1.5·⌊excess/10⌋)`) |
+| Held orbs | sword SIZE from the tier ladder (1 + 0.8·tier, ×5 at T5 — orbs no longer grow the blade); sword attack speed ×(1 + 0.001·souls); orb damage +2%/orb; orbs > 100 add buff-drop chance |
 | Boss kills | +10% mob move AND attack speed each (permanent, multiplicative) |
-| NG+ | enemy HP ×(1 + 3·ngPlus) — 100% base + doubled-effect +100% additional (× level/overflow HP bonus above); run restarts at floor(level/2) keeping 25% of souls (heavy 75% toll) + the weapon tier |
+| NG+ | enemy HP ×(1 + 3·ngPlus) — 100% base + doubled-effect +100% additional (× level/overflow HP bonus above); run restarts at floor(level/2) keeping 25% of souls (heavy 75% toll) + the weapon tier RECALCULATED from the kept bank (weaponTier(⌊souls×0.25⌋)) |
 | Timer | 180 s/level, ends the run |
 
 ---
@@ -607,7 +613,7 @@ Rises once the ENTIRE level is cleared (no living non-boss enemies, spawn queue 
 | Buff badge | `buffEffect` + `buffTime` (hidden when none) |
 | Safe-spawn | `safeSpawn` countdown |
 | Boss bar | boss `hp/maxHp` + variant label |
-| Stats panel | LIVE coefficients: DMG ×, Orb DMG, Orb AOE, Reach, Sword size, Atk speed, Move speed, Enemy HP ×, Mob speed ×, Spawns ×, Regen |
+| Stats panel | LIVE coefficients: DMG ×, Orb DMG, Orb AOE, Reach, Sword size, Atk speed, Move speed, Enemy HP ×, Mob speed ×, Spawns ×, Regen (one formula set shared with the loading screen — `_liveStats()`) |
 | Perf warning | degraded mode (§22), bottom-right, hidden at start |
 | Damage flash | on any player hit |
 | Messages | toasts (goal hints, evolution, ELECTRIC CHAIN, boss defeat, …) |
@@ -624,7 +630,7 @@ Death screen: stats (level reached, total time, souls, rank #) + Restart [N] / N
 
 Target: fluid gameplay with a **30 fps floor** on mid-range hardware.
 
-- **Lights**: shadow-casting lights = 8 max (nearest-8 torches, re-evaluated every 0.5 s, 256² maps). Total point lights per level must stay ≤ the heaviest existing biome — `LIGHT_CEILING.AVG = 154` average / `MAX = 199` peak (VOLCANIC_DEPTHS and FROZEN_HALLS are the heaviest); torchless biomes (FUNGAL, POISON) keep torch averages ≤ 10 / peaks ≤ 50. All non-torch lights shadow-free.
+- **Lights**: shadow-casting lights = **1** max (single nearest-entrance torch, static assignment at level build — the per-0.5 s nearest-player re-sort caused hitches and was removed, `TORCH_SHADOW_COUNT = 1`, 256² map). Total point lights per level must stay ≤ the heaviest existing biome — `LIGHT_CEILING.AVG = 154` average / `MAX = 199` peak (VOLCANIC_DEPTHS and FROZEN_HALLS are the heaviest); torchless biomes (FUNGAL, POISON) keep torch averages ≤ 10 / peaks ≤ 50. All non-torch lights shadow-free.
 - **Torch placement**: one torch per exposed grid edge, spacing 16 u, y 2.5; `vaultOnly` biomes place torches only in VAULT rooms.
 - **Draw calls ≤ 120**; prop instances ≤ 400/level (repeated decoratives MUST be instanced); breakables ≤ 3/room individual meshes.
 - **Pools**: zero per-frame allocation (§13).
@@ -652,6 +658,7 @@ Headless Node scripts (no browser except the smoke test). The scripts stub `docu
 | `node scripts/dungeon-check.mjs 40` | `broken=0/40` |
 | `node scripts/biome-check.mjs` | `biome-check: ALL GATES PASS` |
 | `node scripts/weapon-check.mjs` | `weapon-check: ALL GATES PASS` |
+| `node scripts/boss-check.mjs` | `ALL CHECKS PASSED` |
 | `node scripts/biome-light-probe.mjs` | reproduces the §22 measured table (25 seeds) |
 | headless browser smoke (CDP) | see below |
 
@@ -659,7 +666,9 @@ Headless Node scripts (no browser except the smoke test). The scripts stub `docu
 
 **biome-check** (11 gates): sequence = 10 biomes; palettes have all 9 keys; the 5 new biomes' palette VALUES match the spec verbatim; spawn-weight columns sum to exactly 100 with 7 entries; every biome has a `BIOME_ROOM_MODIFIERS` entry; eligibility resolves (FLOODED_RUINS exempt from the themed-room rule) and every room type appears somewhere; per-biome eligible room weight ≥ 100; every room type has `PROPS.PROPS_PER_ROOM`; referenced light sources exist; TEMPLE modifier = {ARMORED 1.2}; light probe (default 10 seeds, arg-configurable) — every biome avg ≤ 154 / max ≤ 199, vaultOnly torch avg ≤ 10 / max ≤ 50.
 
-**weapon-check** (12 gates): EVOLUTION block complete + finite; tier math exponential 100/200/400/800/1600 (0/99/100/199/200/399/400/799/800/1599/1600 → 0/0/1/1/2/2/3/3/4/4/5); damage ladder 2/2/3→7/7/8 + brute breakpoint (HP 8 dies in 2 hits at tier 5, armored 5 dies in 1 at tier 3); arc table (lengths = MAX_TIER+1, T5 = 1.0/2, pool ≥ 6); ELECTRIC_CHANCE/RANGE finite + referenced in Game; blade length monotonic 0.76→1.0, TIP_LOCAL = length × 0.79, scale clamp ≥ 4; HUD single SOULS counter (no `#souls-line`, no `#tier-pips`) + all 6 tier icons present; Game.js free of `soulsEarned`; six per-tier form builders + `_formMeshes` registry present; no Torus/TorusKnot geometry in PlayerSword; Game.js writes the single souls counter; dungeon-check 0/40.
+**weapon-check** (12 gates + 5b): EVOLUTION block complete + finite; tier math exponential **50/100/200/400/800** (0/49/50/99/100/199/200/399/400/799/800 → 0/0/1/1/2/2/3/3/4/4/5); damage ladder 2/2/3→7/7/8 + brute breakpoint (HP 8 dies in 2 hits at tier 5, armored 5 dies in 1 at tier 3); arc table (lengths = MAX_TIER+1, T5 = 1.0/2, pool ≥ 6); ELECTRIC_CHANCE/RANGE finite + referenced in Game; **5b balance formulas: swordSizeScale T0=1/T5=5, attackSpeedFromSouls(1000)=2, orbDamage 100→6 / 1000→42, electric blast 5% ×5 orb dmg, explosion 5 @2u**; blade length monotonic 0.76→1.0, TIP_LOCAL = length × 0.79, scale clamp ≥ 5; HUD single SOULS counter (no `#souls-line`, no `#tier-pips`) + all 6 tier icons present; Game.js free of `soulsEarned`; six per-tier form builders + `_formMeshes` registry present; no Torus/TorusKnot geometry in PlayerSword; Game.js writes the single souls counter; dungeon-check 0/40.
+
+**boss-check** (gates): boss biome cadence (7/14/21 = SPECTRAL_COURT, 6/8 are not); BOSS constants (INTERVAL 7, HP_MULT 22.5, MAX_MINIONS 25, CHARGE_DMG 2); base HP 4 → 90; wealth/hearts halved stack (49 souls → 90, 100 souls → 113, 300 souls → 158, 5 hearts → 118, 100 souls + 5 hearts → 154); spawn folds the level term + heartsExtra; death at 90 dmg fires onKill; CHARGING only in range + off cooldown; **BLINK/SMOKE: no blink/smoke without a player (safe-spawn idle), SkeletonSystem wires onBlinkHit + _tickBossSmoke + BLINK_DMG**; BURN type/HP/death/dispose.
 
 **browser smoke** (headless Chromium via raw CDP, Node WebSocket): boot the game against the dev server; wait for level build; assert canvas + WebGL2; HUD ids present (`#orb-count`, `#perf-warning`, `#biome-label`, `#timer`, `#hp-fill`, `#combo-pips`, `#weapon-slot`, `#stats-panel`); single souls label `SOULS`; `#perf-warning` hidden; loading screen passed; timer advances; **zero JS exceptions**.
 
@@ -679,11 +688,11 @@ All player-facing text is part of the game feel and is binding (text is not a gr
 | Entered exit room | `The depths await — press E to descend` |
 | Directional hint | every 8 s: `Golden exit lies ${dir} (${dist}m)` — dist in whole meters; dir from the 8-way compass (atan2 sectors of 45°: north / northeast / east / southeast / south / southwest / west / northwest) |
 | Weapon evolution | `Your blade awakens — Tier ${t}` · final tier: `Your blade is whole — the lightsaber sings` |
-| Electric chain | `ELECTRIC CHAIN — ${k} foes vaporized!` |
-| Boss defeated | `The Spectral Lord falls — a heart and a blessing are yours. The portal opens!` |
+| Electric chain | `ELECTRIC CHAIN — ${k} foes blasted!` |
+| Boss defeated | `The Spectral Lord falls — +${reward} souls, a heart and a blessing are yours. The portal opens!` |
 | Death titles | `The dead claim you` (killed) · `The darkness consumes you` (time out) |
 | Death stats | `Level reached: ${level}${ng} · Total time: ${m}:${ss} · Souls: ${orbs}${rank}` |
-| Death buttons | `Restart — Level 1 [N]` · `New Game+ [Y] — Level ${half} (keep ${orbs} Souls · mobs +${10·ng}% HP)` |
+| Death buttons | `Restart — Level 1 [N]` · `New Game+ [Y] — Level ${half} (keep ${kept} of ${souls} Souls${→ Tn / → Dagger} · mobs +${200·ng}% HP)` — the NG+ button shows the exact post-toll bank AND the weapon tier that bank buys (`weaponTier(⌊souls×0.25⌋)`); the `+200·ng%` label is the display text (the real multiplier is `×(1 + 3·ngPlus)`) |
 | Buff descriptions (title screen) | `No active buff` · `BRIGHT — the level lights up, enemies flee from you` · `FIREBALL — right-click hurls an explosive fireball` · `EMPOWERED — longer reach, faster movement & attacks` · `GODSPEED — +50% attack speed and +50% move speed` · `HUNTER — a spectral boss companion follows and attacks mobs` |
 | Perf warning | `⚠ DEGRADED MODE — decorations reduced for performance` |
 | HUD hint line | `WASD move · Shift sprint · LMB orb · RMB dagger · E descend · Tab ledger · P bloom` |
@@ -697,6 +706,10 @@ All player-facing text is part of the game feel and is binding (text is not a gr
 
 ## 26. Behavioral details & edge cases (binding)
 
+- **Boss BLINK**: teleports ONTO the player through walls; the 1 s spark telegraph (expanding ring + 12 sparks) is the dodge window — sprint out of the 3 u blast. The boss is frozen (BLINKING) while charging; on detonation `onBlinkHit` damages the player within `BLINK_RADIUS` (i-frames respected).
+- **Boss SMOKE**: cloud DoT is ticked by SkeletonSystem (`_tickBossSmoke`) — 1 heart/s while inside a LINGERING cloud, and the tick only lands when the global invuln window is clear (a charge hit just before delays the next smoke tick). Clouds are cleared on boss dispose.
+- **NG+ tier recalc**: the weapon tier is recomputed from the post-toll bank on NG+ (`weaponTier(⌊collectedOrbs × 0.25⌋)`) — within a run it still only upgrades. The death-screen button previews it (`→ Tn` / `→ Dagger`).
+- **Permanent hearts on save/load/NG+**: `maxHealth` is part of the serialized state; level-advance, NG+ and save/load all carry it (GameState constructor accepts `maxHealth`); a stale desynced save self-heals to `base + bossKills` on load.
 - **Sarcophagus** (CRYPT interactive): triggers on first proximity < 2.5 u; lid slides open over 0.6 s; 30% chance to spawn a Wraith (level-scaled); guaranteed 1 orb drop inside; one-time. Has a collision AABB.
 - **Exit portal**: golden ring + disc at the exit cell center, y 1.3; hidden until the boss dies on boss levels (`_bossPortalOpen`); `E` works only when `inExitRoom` (within 2 u of the exit cell center) AND the portal is open.
 - **Start/exit markers** (guidance): green ring + light at the entrance; golden ring + glow + vertical beam + light at the exit.
@@ -724,7 +737,11 @@ All player-facing text is part of the game feel and is binding (text is not a gr
 - **Carried buff ordering**: capture the buff before replacing `state`; re-apply its side effects AFTER `_initCombat` rebuilds skeletons/lighting; always clear stuck visuals when no buff is carried (this fixed the "fireball stuck on screen + sword hidden while buffEffect = 0" bug).
 - **Title gate**: lifting requires BOTH the fps window AND an empty spawn queue — the queue drain is what actually prevents the post-title hitch.
 - **Camera layers are load-bearing**: sword on layer 2 (the layer-0 headlight must never light it), enemy-glow pass on layer 1, world on layer 0. Preserve the scheme.
-- **Orb pool split**: 48 normal slots + 10 fireball slots; the round-robin allocator MUST filter by slot type so a volley never spawns an orange fireball mid-sequence.
+- **Orb pool split**: 48 normal slots + 6 fireball slots; the round-robin allocator MUST filter by slot type so a volley never spawns an orange fireball mid-sequence.
+- **Fireball module singletons**: fireball materials + glow texture are module-level singletons (`getFireballShared()`) — built once, reused every level, NEVER disposed. Do not move them into per-level ownership or the buff will recompile GPU programs mid-fight (the pre-warm + singleton pattern is what killed the switch lag).
+- **NG+ tier recalc**: `weaponTier = weaponTier(⌊collectedOrbs × 0.25⌋)` on NG+ — never carry the old tier through a cycle. Within a run, `_checkWeaponEvolution` only upgrades (`t <= state.weaponTier → return`).
+- **Overflow is LINEAR**: `enemyHpMultiplier` overflow term is `1 + 1.5·⌊excess/10⌋`. Exponential (`2^steps`) and quadratic (`1+k²`) drafts were BOTH user-rejected (snowballed: x485 @ excess 220); linear outscales the player's ~linear damage growth without the cliff. Do not "improve" it back.
+- **`_maxHealth` invariant**: `state.maxHealth` must mirror `_maxHealth` on every regen (the level-advance desync once wrote maxHealth=3 with bossKills=5 into death-saves, wiping boss-earned hearts on load). `fromJSON` self-heals stale saves to `base + bossKills`.
 - **Legacy/unused (present but inert — do not build on them)**: `DUNGEON.TORCH_SPACING` (the real spacing is 16, in LightingSystem), `DUNGEON.ARCH_PROBABILITY` / `CRACK_PROBABILITY` (WorldBuilder builds no arches/cracks), the `minimapVisible` flag, the stamina-fill element (the stamina bar was removed; the element is kept pinned at 100%), the post-processing `xray` flag (no buff drives it), `totalOrbs` (per-level count, not scored).
 - **`window.game` is exposed** — keep it (the headless QA hook).
 - **Perf-cuts philosophy**: many systems carry "~90% cut" comments (smoke 90→9, dust 300→30, trail 4→1 per pool, sparks 4→1, death bursts 30→3, floor debris −80%). These are intentional; do not re-inflate them — the §22 budgets are the contract.
@@ -735,13 +752,17 @@ All player-facing text is part of the game feel and is binding (text is not a gr
 
 Use this when tuning or extending — keep the intent, not just the values.
 
-- **Orbs are ammo AND spawn pressure**: the same `orbPowerMultiplier` drives sword scale and enemy spawns; orbs above 100 stop growing the sword (cap ×4) and instead feed buff drops + extra spawns. Hoarding has diminishing returns and escalating risk — that is the game's economy.
-- **Souls ladder cap at 500 (tier 5)**: endgame damage 7/7/8 one-hits most of the fixed-HP roster but a brute (8 HP) still takes 2 hits; NG+ HP ×2 keeps the top tier honest. Uncapped damage would trivialize the roster.
+- **Orbs are ammo AND spawn pressure**: the same bank drives spawns (`spawnMult = min(1 + (level+souls)/10, ×100)`) and, past the cap, enemy HP (linear overflow). Orbs above 100 stop growing the sword (size is tier-driven now) and instead feed buff drops + extra spawns. Hoarding has diminishing returns and escalating risk — that is the game's economy.
+- **Souls ladder 50/100/200/400/800 (tier 5 at 800)**: halved from 100/200/400/800/1600 so tiers arrive sooner, still exponential. Endgame damage 7/7/8 × damageMult (size × tier × level) one-hits most of the fixed-HP roster but a brute (8 HP) still takes 2 hits at tier 5 raw; NG+ HP ×(1+3·ngPlus) and the level/overflow terms keep the top tier honest. Uncapped damage would trivialize the roster.
+- **Sword size is tier-driven, not orb-driven**: the blade always keeps its starting size relative to orbs (user ruling) — size now comes from the evolution tier (+80%/tier, exactly ×5 at T5), so the form reads the ladder, not the wallet. EMPOWERED still stacks on top, clamped at ×5.
+- **damageMult = size × tier × level**: half the size bonus, ×1.1 per tier, ×1.1 per 5 levels — the level term is what keeps NG+ runs survivable as mob HP compounds.
 - **Total-only souls HUD**: the tier is a feel signal (form + toast), never a number. The HUD shows real state only — no fake meters.
 - **Buffs never repeat back-to-back** so every pickup is visibly different; breakable buffs cap at 90 s while boss buffs run 5 min uncapped — rewards scale with the source.
 - **Torchless biomes (FUNGAL, POISON)** are both a perf move (≈50 lights vs ≈135 if torchlit) and a theme move (lit by their own glow). When a biome is too heavy, cut structure like this — never lower the light ceiling.
 - **EMBER_FORGE Brute weight 35**: the forge is the last rung of the cycle — a deliberate finale pressure band.
-- **NG+ keeps 90% of orbs and starts at half the level**: a softer reset that preserves the power fantasy while mobs get +100% HP. The 10% tax is the only death penalty beyond the level reset.
+- **NG+ keeps 25% of souls and starts at half the level**: the 75% toll is the death penalty beyond the level reset; the weapon tier is RECALCULATED from the kept bank so a maxed blade is never free across a cycle, while mobs get +300% HP per cycle.
+- **Boss wealth/hearts stack is halved**: souls (+25%/50) and permanent hearts (×1.1 each past 3) stack multiplicatively, then the excess is halved — a rich, heart-heavy player faces a tougher lord without double-dipping to absurdity.
+- **Boss BLINK + SMOKE are anti-kiting tools**: BLINK teleports onto the player (1 s spark window = the dodge), SMOKE denies an area with a lingering DoT — the boss can no longer be kited at range forever.
 - **Buff carry ×5 (capped 90 s)**: smooths level transitions without letting a 5-minute boss buff trivialize the next level.
 - **The 30 fps floor is non-negotiable**: when a feature threatens it, CUT decisively (torchless biomes, density caps, 90% particle cuts, degraded mode). Never lower `LIGHT_CEILING`.
 - **Post-processing "5% rule"**: bloom, saturation, and the enemy glow all sit at ~5% of their original strength — atmosphere over spectacle, and ON by default (toggleable with P).
@@ -753,16 +774,16 @@ Use this when tuning or extending — keep the intent, not just the values.
 
 1. **Boot**: title appears; lifts ≥ 30 fps; safe-spawn counts 5 → 0; zero console errors.
 2. **Biome cadence**: levels 1–2 STONE, 3–4 CRYPT, 5–6 FUNGAL, 7 boss, 8 VOLCANIC, 9–10 FROZEN, 11–12 CRYSTAL, 13 POISON, 14 boss, 15–16 GOLDEN, 17–18 FLOODED, 19–20 EMBER, 21 boss, 22 STONE.
-3. **Boss levels (7/14/21)**: portal closed until the boss dies; boss bar shows; defeat grants the heart + 5-min buff + opens the portal.
+3. **Boss levels (7/14/21)**: portal closed until the boss dies; boss bar shows; defeat grants the heart + souls (level × max(1, ngPlus)) + 5-min buff + opens the portal. **BLINK**: 1 s spark telegraph is the dodge (sprint out of 3 u). **SMOKE**: cloud lingers 4 s and DoTs 1 heart/s inside.
 4. **Spawns**: biome weight mixes feel right; wraiths only in crypts; brutes surge in EMBER_FORGE; elites appear ~1-in-10 over a long session; the ARENA's first spawn is elite.
-5. **Sword**: combo 2/2/3 → 7/7/8 by tier; T3+ arc bolts; T5 double bolts every strike; the 1% electric chain eventually fires.
-6. **Orbs**: steps 2–3 of a sequence are free; step 3 explodes; holding LMB steps at 0.22 s; 0-orbs shows the warning once.
+5. **Sword**: combo 2/2/3 → 7/7/8 by tier; T3+ arc bolts (orb damage); T5 double bolts every strike; the 5% electric blast eventually fires (5× orb damage, no insta-kill); tier ladder 50/100/200/400/800.
+6. **Orbs**: steps 2–3 of a sequence are free; step 3 explodes (5 dmg @ 2 u); holding LMB steps at 0.22 s; 0-orbs shows the warning once.
 7. **Buffs**: never back-to-back repeats; boss buff 5:00 uncapped; breakable buff ≤ 1:30; carry ×5 across levels; BRIGHT makes everything flee.
 8. **Degraded mode**: force low fps (throttling/devtools) → after ~10 s the warning appears and ~half the decorations vanish; the next level builds at 50%.
 9. **Memory**: 3 descends with stable RAM/GPU memory; no console warnings.
-10. **NG+**: death → [Y] keeps 90% of orbs, starts at half the level, mobs have +100% HP; [N] restarts clean at level 1.
+10. **NG+**: death → [Y] keeps 25% of souls (75% toll; button shows exact kept amount + the tier it buys, → Tn / → Dagger), starts at half the level, mobs have +300% HP per cycle; [N] restarts clean at level 1.
 11. **Leaderboard**: entries rank NG+ → level → time → orbs; top 10 persist in localStorage.
-12. **Perf invariants**: `renderer.info` — draw calls ≤ 120, prop instances ≤ 400, lights ≤ ceiling, shadow casters = 8.
+12. **Perf invariants**: `renderer.info` — draw calls ≤ 120, prop instances ≤ 400, lights ≤ ceiling, shadow casters = 1.
 
 ---
 
